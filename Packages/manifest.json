@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "com.unity.inputsystem": "1.20.0"
+    "com.unity.inputsystem": "1.20.0",
+    "com.coplaydev.unity-mcp": "https://github.com/CoplayDev/unity-mcp.git?path=/MCPForUnity#856d85eda122f7633b8358475877ba4bdf7b20f0"
   }
 }

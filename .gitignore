@@ -12,6 +12,7 @@
 .vs/
 .idea/
 .vscode/
+.codex/
 *.csproj
 *.sln
 *.suo
