@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-/// <summary>Simple top-down movement using WASD or the arrow keys.</summary>
+/// <summary>Screen-relative movement for the fixed isometric camera.</summary>
 public sealed class PlayerMovement : MonoBehaviour
 {
     [SerializeField, Min(0f)] private float moveSpeed = 5f;
@@ -21,7 +21,10 @@ public sealed class PlayerMovement : MonoBehaviour
         if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) vertical -= 1f;
         if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) vertical += 1f;
 
-        Vector3 direction = new Vector3(horizontal, 0f, vertical).normalized;
+        // These diagonals compensate for the camera's 45-degree world-space yaw.
+        Vector3 screenRight = new Vector3(1f, 0f, 1f).normalized;
+        Vector3 screenUp = new Vector3(-1f, 0f, 1f).normalized;
+        Vector3 direction = (screenRight * horizontal + screenUp * vertical).normalized;
         transform.position += direction * (moveSpeed * Time.deltaTime);
     }
 }
