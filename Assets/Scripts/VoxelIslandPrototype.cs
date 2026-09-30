@@ -20,10 +20,14 @@ public sealed class VoxelIslandPrototype : MonoBehaviour
     private GameObject slime;
     private Transform slimeVisual;
     private GameObject attackRing;
+    private GameObject slashEffect;
+    private GameObject skeleton;
+    private Transform skeletonVisual;
     private Camera gameCamera;
 
     private float playerHealth = 100f;
     private float enemyHealth = 100f;
+    private float skeletonHealth = 140f;
     private float nextPlayerAttack;
     private float nextEnemyAttack;
     private float nextDash;
@@ -31,7 +35,10 @@ public sealed class VoxelIslandPrototype : MonoBehaviour
     private float nextHeal;
     private float ringVisibleUntil;
     private float enemyRespawnAt;
+    private float skeletonRespawnAt;
     private bool enemyAlive = true;
+    private bool skeletonAlive = true;
+    private float skeletonAttackAt;
     private Vector3 playerSpawn;
 
     private void Awake()
@@ -75,10 +82,13 @@ private void Update()
     player.transform.position = playerPosition;
 
     UpdateSlime();
+    UpdateSkeleton();
     UpdatePlayerActions();
 
     if (attackRing != null && Time.time > ringVisibleUntil)
         attackRing.SetActive(false);
+    if (slashEffect != null && Time.time > slashEffect.GetComponent<SlashLifetime>().ExpiresAt)
+        slashEffect.SetActive(false);
 }
 
 private void LateUpdate()
@@ -119,7 +129,7 @@ private void LateUpdate()
         water.name = "Ocean";
         water.transform.position = new Vector3(0f, -1.45f, 0f);
         water.transform.localScale = new Vector3(60f, 0.35f, 60f);
-        water.GetComponent<Renderer>().material.color = new Color(0.02f, 0.62f, 0.78f);
+        water.GetComponent<Renderer>().material.color = new Color(0.035f, 0.58f, 0.72f);
     }
 
     private void BuildIsland()
@@ -132,9 +142,28 @@ private void LateUpdate()
                 if (Mathf.Abs(x) == IslandRadius && Mathf.Abs(z) == IslandRadius)
                     continue;
 
-                GameObject tile = (x == 0 || z == 0) ? pathTileAsset : grassTileAsset;
-                SpawnModel(tile, island.transform, (x == 0 || z == 0) ? "Path Tile" : "Grass Tile",
+                bool path = Mathf.Abs(x) <= 1 || Mathf.Abs(z) <= 1;
+                GameObject tile = path ? pathTileAsset : grassTileAsset;
+                SpawnModel(tile, island.transform, path ? "Warm Sand Path" : "Grass Tile",
                     new Vector3(x, 0f, z), Quaternion.identity, Vector3.one);
+            }
+        }
+
+        // Layer the floating island with chunky dirt blocks beneath the grassy rim.
+        GameObject dirtAsset = FindAsset("Block_Dirt");
+        for (int x = -IslandRadius; x <= IslandRadius; x++)
+        {
+            for (int z = -IslandRadius; z <= IslandRadius; z++)
+            {
+                if (Mathf.Abs(x) != IslandRadius && Mathf.Abs(z) != IslandRadius) continue;
+                for (int layer = 0; layer < 2; layer++)
+                {
+                    Vector3 edge = new Vector3(x, -0.43f - layer * 0.48f, z);
+                    if (dirtAsset != null)
+                        SpawnModel(dirtAsset, island.transform, "Layered Island Earth", edge, Quaternion.identity, Vector3.one);
+                    else
+                        CreateColorCube("Layered Island Earth", edge, new Vector3(1f, .48f, 1f), new Color(.48f, .29f, .18f));
+                }
             }
         }
 
@@ -154,6 +183,50 @@ private void LateUpdate()
             Quaternion.identity, new Vector3(0.68f, 0.68f, 0.68f));
         SpawnModel(stoneAsset, island.transform, "Stone Marker", new Vector3(-6.4f, 0f, -5.6f),
             Quaternion.identity, new Vector3(0.88f, 0.88f, 0.88f));
+
+        // Keep the central fighting lanes open and cluster voxel foliage around the perimeter.
+        Vector3[] treeSpots = { new Vector3(-6f, 0f, 6f), new Vector3(6f, 0f, -6f), new Vector3(-7f, 0f, -2f), new Vector3(7f, 0f, 3f) };
+        foreach (Vector3 spot in treeSpots) CreateVoxelTree(island.transform, spot);
+        for (int i = 0; i < 22; i++)
+        {
+            Vector2 p = Random.insideUnitCircle.normalized * Random.Range(5.5f, 7.8f);
+            if (Mathf.Abs(p.x) < 2.2f || Mathf.Abs(p.y) < 2.2f) continue;
+            CreateBush(island.transform, new Vector3(p.x, 0f, p.y));
+        }
+        CreateRockCluster(island.transform, new Vector3(2.9f, 0f, -3.1f));
+        CreateRockCluster(island.transform, new Vector3(-4.2f, 0f, 4.4f));
+    }
+
+    private void CreateVoxelTree(Transform parent, Vector3 position)
+    {
+        CreateColorCube("Tree Trunk", position + Vector3.up * .75f, new Vector3(.72f, 1.5f, .72f), new Color(.39f, .22f, .12f), parent);
+        Color[] greens = { new Color(.25f, .62f, .12f), new Color(.31f, .72f, .15f), new Color(.19f, .53f, .11f) };
+        Vector3[] canopy = { Vector3.up * 1.8f, Vector3.up * 2.5f, new Vector3(.62f, 2.1f, 0f), new Vector3(-.62f, 2.1f, 0f), new Vector3(0f, 2.1f, .62f), new Vector3(0f, 2.1f, -.62f) };
+        for (int i = 0; i < canopy.Length; i++)
+            CreateColorCube("Tree Canopy", position + canopy[i], Vector3.one * (i == 0 ? 1.25f : .95f), greens[i % greens.Length], parent);
+    }
+
+    private void CreateBush(Transform parent, Vector3 position)
+    {
+        CreateColorCube("Voxel Shrub", position + Vector3.up * .38f, new Vector3(.72f, .76f, .72f), new Color(.26f, .61f, .13f), parent);
+        CreateColorCube("Voxel Shrub", position + new Vector3(.42f, .28f, .08f), new Vector3(.5f, .55f, .52f), new Color(.34f, .72f, .16f), parent);
+    }
+
+    private void CreateRockCluster(Transform parent, Vector3 position)
+    {
+        Vector3[] offsets = { Vector3.zero, new Vector3(.55f, .32f, .1f), new Vector3(-.42f, .25f, -.18f), new Vector3(.12f, .62f, -.1f) };
+        for (int i = 0; i < offsets.Length; i++)
+            SpawnModel(stoneAsset, parent, "Broken Stone", position + offsets[i], Quaternion.Euler(0f, i * 31f, 0f), Vector3.one * (i == 3 ? .55f : .7f));
+    }
+
+    private void CreateColorCube(string name, Vector3 position, Vector3 size, Color color, Transform parent = null)
+    {
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.name = name;
+        cube.transform.position = position;
+        cube.transform.localScale = size;
+        if (parent != null) cube.transform.SetParent(parent, true);
+        cube.GetComponent<Renderer>().material.color = color;
     }
 
     private void BuildCharacters()
@@ -172,6 +245,13 @@ private void LateUpdate()
         slime.AddComponent<BoxCollider>().size = new Vector3(0.8f, 0.9f, 0.7f);
         slimeVisual = SpawnModel(slimeAsset, slime.transform, "Red Slime Visual", Vector3.zero,
             Quaternion.identity, Vector3.one).transform;
+
+        skeleton = new GameObject("Enemy - Bone Guard");
+        skeleton.transform.position = new Vector3(5.1f, GroundTop, 2.4f);
+        skeletonVisual = CreateSkeletonVisual(skeleton.transform);
+        BoxCollider skeletonHitbox = skeleton.AddComponent<BoxCollider>();
+        skeletonHitbox.center = new Vector3(0f, .77f, 0f);
+        skeletonHitbox.size = new Vector3(1.2f, 1.56f, .55f);
     }
 
 private void SetupCameraAndLighting()
@@ -185,13 +265,13 @@ private void SetupCameraAndLighting()
     }
 
     gameCamera.orthographic = true;
-    gameCamera.orthographicSize = 9.6f;
+    gameCamera.orthographicSize = 10.2f;
     gameCamera.transform.position = player.transform.position + new Vector3(12f, 12f, -12f);
     gameCamera.transform.LookAt(player.transform.position + Vector3.up * 0.6f);
     gameCamera.clearFlags = CameraClearFlags.SolidColor;
     gameCamera.backgroundColor = new Color(0.02f, 0.66f, 0.80f);
 
-    Light sceneLight = FindObjectOfType<Light>();
+    Light sceneLight = FindFirstObjectByType<Light>();
     if (sceneLight == null)
     {
         GameObject lightObject = new GameObject("Directional Light");
@@ -201,6 +281,8 @@ private void SetupCameraAndLighting()
 
     sceneLight.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
     sceneLight.intensity = 1.35f;
+    sceneLight.shadows = LightShadows.Soft;
+    RenderSettings.ambientLight = new Color(.78f, .84f, .9f);
 }
 
     private void BuildAttackRing()
@@ -213,6 +295,44 @@ private void SetupCameraAndLighting()
         if (ringCollider != null)
             Destroy(ringCollider);
         attackRing.SetActive(false);
+
+        slashEffect = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        slashEffect.name = "Golden Sword Arc";
+        slashEffect.transform.localScale = new Vector3(1.8f, .08f, .18f);
+        slashEffect.GetComponent<Renderer>().material.color = new Color(1f, .72f, .18f);
+        Destroy(slashEffect.GetComponent<Collider>());
+        SlashLifetime lifetime = slashEffect.AddComponent<SlashLifetime>();
+        lifetime.HideAfter(.17f);
+        slashEffect.SetActive(false);
+    }
+
+    private Transform CreateSkeletonVisual(Transform root)
+    {
+        GameObject visual = new GameObject("Bone Guard Model");
+        visual.transform.SetParent(root, false);
+        Color bone = new Color(.86f, .82f, .69f);
+        CreateLocalColorCube("Skull", new Vector3(0f, 1.25f, 0f), new Vector3(.55f, .58f, .48f), bone, visual.transform);
+        CreateLocalColorCube("Rib Cage", new Vector3(0f, .72f, 0f), new Vector3(.48f, .57f, .34f), bone, visual.transform);
+        CreateLocalColorCube("Pelvis", new Vector3(0f, .37f, 0f), new Vector3(.5f, .22f, .34f), bone, visual.transform);
+        CreateLocalColorCube("Left Leg", new Vector3(-.14f, .12f, 0f), new Vector3(.16f, .42f, .18f), bone, visual.transform);
+        CreateLocalColorCube("Right Leg", new Vector3(.14f, .12f, 0f), new Vector3(.16f, .42f, .18f), bone, visual.transform);
+        CreateLocalColorCube("Left Arm", new Vector3(-.38f, .68f, 0f), new Vector3(.16f, .6f, .17f), bone, visual.transform);
+        CreateLocalColorCube("Right Arm", new Vector3(.38f, .68f, 0f), new Vector3(.16f, .6f, .17f), bone, visual.transform);
+        CreateLocalColorCube("Rusty Blade", new Vector3(.52f, .65f, .12f), new Vector3(.12f, .82f, .12f), new Color(.48f, .55f, .57f), visual.transform);
+        CreateLocalColorCube("Eye", new Vector3(-.13f, 1.29f, -.245f), new Vector3(.09f, .1f, .035f), new Color(.78f, .12f, .08f), visual.transform);
+        CreateLocalColorCube("Eye", new Vector3(.13f, 1.29f, -.245f), new Vector3(.09f, .1f, .035f), new Color(.78f, .12f, .08f), visual.transform);
+        return visual.transform;
+    }
+
+    private static void CreateLocalColorCube(string name, Vector3 localPosition, Vector3 localSize, Color color, Transform parent)
+    {
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.name = name;
+        cube.transform.SetParent(parent, false);
+        cube.transform.localPosition = localPosition;
+        cube.transform.localRotation = Quaternion.identity;
+        cube.transform.localScale = localSize;
+        cube.GetComponent<Renderer>().material.color = color;
     }
 
     private void UpdatePlayerActions()
@@ -225,7 +345,7 @@ private void SetupCameraAndLighting()
         if (basicAttack && Time.time >= nextPlayerAttack)
         {
             nextPlayerAttack = Time.time + 0.42f;
-            TryDamageSlime(34f, 2.2f);
+            TryDamageNearest(34f, 2.2f, false);
         }
 
         if (keyboard != null && keyboard.qKey.wasPressedThisFrame && Time.time >= nextDash)
@@ -241,7 +361,7 @@ private void SetupCameraAndLighting()
         if (keyboard != null && keyboard.eKey.wasPressedThisFrame && Time.time >= nextPulse)
         {
             nextPulse = Time.time + 3.5f;
-            TryDamageSlime(26f, 4.8f);
+            TryDamageNearest(26f, 4.8f, true);
         }
 
         if (keyboard != null && keyboard.rKey.wasPressedThisFrame && Time.time >= nextHeal &&
@@ -252,22 +372,47 @@ private void SetupCameraAndLighting()
         }
     }
 
-    private void TryDamageSlime(float damage, float range)
+    private void TryDamageNearest(float damage, float range, bool area)
     {
-        if (!enemyAlive || Vector3.Distance(player.transform.position, slime.transform.position) > range)
-            return;
+        GameObject target = null;
+        float nearest = range;
+        if (enemyAlive)
+        {
+            float distance = Vector3.Distance(player.transform.position, slime.transform.position);
+            if (distance < nearest) { nearest = distance; target = slime; }
+        }
+        if (skeletonAlive)
+        {
+            float distance = Vector3.Distance(player.transform.position, skeleton.transform.position);
+            if (distance < nearest) { nearest = distance; target = skeleton; }
+        }
+        if (target == null) return;
 
-        enemyHealth -= damage;
-        attackRing.transform.position = new Vector3(slime.transform.position.x, GroundTop + 0.025f,
-            slime.transform.position.z);
+        bool hitSlime = target == slime;
+        if (hitSlime) enemyHealth -= damage;
+        else skeletonHealth -= damage;
+
+        Vector3 targetPosition = target.transform.position;
+        attackRing.transform.position = new Vector3(targetPosition.x, GroundTop + 0.025f, targetPosition.z);
+        attackRing.transform.localScale = area ? new Vector3(2.7f, .018f, 2.7f) : new Vector3(1.25f, .018f, 1.25f);
         attackRing.SetActive(true);
-        ringVisibleUntil = Time.time + 0.18f;
+        ringVisibleUntil = Time.time + (area ? .32f : .18f);
+        slashEffect.transform.position = targetPosition + Vector3.up * .9f;
+        slashEffect.transform.rotation = Quaternion.Euler(0f, Random.Range(-40f, 40f), 35f);
+        slashEffect.SetActive(!area);
+        slashEffect.GetComponent<SlashLifetime>().ShowFor(.17f);
 
-        if (enemyHealth <= 0f)
+        if (hitSlime && enemyHealth <= 0f)
         {
             enemyAlive = false;
             slimeVisual.gameObject.SetActive(false);
             enemyRespawnAt = Time.time + 2.4f;
+        }
+        else if (!hitSlime && skeletonHealth <= 0f)
+        {
+            skeletonAlive = false;
+            skeletonVisual.gameObject.SetActive(false);
+            skeletonRespawnAt = Time.time + 3f;
         }
     }
 
@@ -303,6 +448,31 @@ private void SetupCameraAndLighting()
         }
     }
 
+    private void UpdateSkeleton()
+    {
+        if (!skeletonAlive)
+        {
+            if (Time.time >= skeletonRespawnAt)
+            {
+                skeletonAlive = true;
+                skeletonHealth = 140f;
+                skeleton.transform.position = new Vector3(5.1f, GroundTop, 2.4f);
+                skeletonVisual.gameObject.SetActive(true);
+            }
+            return;
+        }
+        Vector3 direction = player.transform.position - skeleton.transform.position;
+        direction.y = 0f;
+        float distance = direction.magnitude;
+        if (distance > 1.3f) skeleton.transform.position += direction.normalized * (.82f * Time.deltaTime);
+        if (distance < 1.55f && Time.time >= skeletonAttackAt)
+        {
+            skeletonAttackAt = Time.time + 1.4f;
+            playerHealth = Mathf.Max(0f, playerHealth - 13f);
+            if (playerHealth <= 0f) { playerHealth = 100f; player.transform.position = playerSpawn; }
+        }
+    }
+
     private void OnGUI()
     {
         if (player == null || gameCamera == null)
@@ -311,8 +481,8 @@ private void SetupCameraAndLighting()
         GUI.color = new Color(0.055f, 0.07f, 0.075f, 0.92f);
         GUI.DrawTexture(new Rect(18f, 18f, 260f, 76f), Texture2D.whiteTexture);
         GUI.color = Color.white;
-        GUI.Label(new Rect(32f, 23f, 230f, 26f), "VOXEL ISLAND");
-        GUI.Label(new Rect(32f, 51f, 230f, 24f), "Defeat the slime  |  WASD to move");
+        GUI.Label(new Rect(32f, 23f, 230f, 26f), "ISLAND ARENA");
+        GUI.Label(new Rect(32f, 51f, 230f, 24f), "Defeat the monsters  |  WASD to move");
 
         if (enemyAlive)
         {
@@ -324,20 +494,26 @@ private void SetupCameraAndLighting()
                 DrawBar(new Rect(x, y, 104f, 13f), enemyHealth / 100f, new Color(0.96f, 0.12f, 0.13f));
             }
         }
+        if (skeletonAlive)
+        {
+            Vector3 screen = gameCamera.WorldToScreenPoint(skeleton.transform.position + Vector3.up * 1.75f);
+            if (screen.z > 0f) DrawBar(new Rect(screen.x - 42f, Screen.height - screen.y, 84f, 10f), skeletonHealth / 140f, new Color(.78f, .72f, .53f));
+        }
 
-        float panelWidth = 560f;
+        float panelWidth = 650f;
         float panelX = (Screen.width - panelWidth) * 0.5f;
-        float panelY = Screen.height - 102f;
+        float panelY = Screen.height - 104f;
         GUI.color = new Color(0.055f, 0.07f, 0.075f, 0.94f);
-        GUI.DrawTexture(new Rect(panelX, panelY, panelWidth, 82f), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(panelX, panelY, panelWidth, 84f), Texture2D.whiteTexture);
         GUI.color = Color.white;
         GUI.Label(new Rect(panelX + 18f, panelY + 10f, 72f, 20f), "HEALTH");
-        DrawBar(new Rect(panelX + 18f, panelY + 36f, 235f, 28f), playerHealth / 100f,
+        DrawBar(new Rect(panelX + 18f, panelY + 36f, 250f, 28f), playerHealth / 100f,
             new Color(0.94f, 0.12f, 0.16f));
 
-        DrawAbility(panelX + 292f, panelY + 13f, "Q", "DASH", Time.time < nextDash);
-        DrawAbility(panelX + 365f, panelY + 13f, "E", "PULSE", Time.time < nextPulse);
-        DrawAbility(panelX + 438f, panelY + 13f, "R", "HEAL", Time.time < nextHeal);
+        DrawAbility(panelX + 304f, panelY + 13f, "Q", "DASH", Time.time < nextDash);
+        DrawAbility(panelX + 378f, panelY + 13f, "E", "PULSE", Time.time < nextPulse);
+        DrawAbility(panelX + 452f, panelY + 13f, "R", "HEAL", Time.time < nextHeal);
+        DrawAbility(panelX + 556f, panelY + 13f, "LMB", "STRIKE", false);
         GUI.Label(new Rect(panelX + 18f, panelY + 65f, 250f, 18f), "SPACE / LEFT CLICK  ATTACK");
     }
 
@@ -360,4 +536,11 @@ private void SetupCameraAndLighting()
         GUI.Label(new Rect(x, y + 5f, 58f, 22f), key);
         GUI.Label(new Rect(x - 5f, y + 31f, 68f, 20f), label);
     }
+}
+
+public sealed class SlashLifetime : MonoBehaviour
+{
+    public float ExpiresAt { get; private set; }
+    public void HideAfter(float seconds) { ExpiresAt = Time.time + seconds; }
+    public void ShowFor(float seconds) { ExpiresAt = Time.time + seconds; }
 }
