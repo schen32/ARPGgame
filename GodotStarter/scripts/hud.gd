@@ -4,6 +4,7 @@ extends Control
 const SHAPE = preload("res://scripts/prototype_shape.gd")
 const EXPERIENCE_BAR = preload("res://scripts/experience_bar.gd")
 const INVENTORY = preload("res://scripts/inventory.gd")
+const SKILL_TREE = preload("res://scripts/skill_tree_panel.gd")
 const SKILL_SLOT = preload("res://scripts/skill_slot.gd")
 const DAMAGE_NOTICE = preload("res://shaders/damage_notice.gdshader")
 const DAMAGE_NOTICE_DURATION: float = 0.32
@@ -24,6 +25,8 @@ var inventory
 var damage_overlay: ColorRect
 var damage_timer: float = 0.0
 var owns_inventory_pause: bool = false
+var tree_panel
+var tree_button: Button
 
 func panel_style(background: Color, border: Color, radius: int = 5) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -111,15 +114,46 @@ func _ready() -> void:
 	inventory.player = player
 	add_child(inventory)
 	inventory.visibility_changed.connect(_on_inventory_visibility_changed)
+	tree_panel = SKILL_TREE.new()
+	tree_panel.player = player
+	add_child(tree_panel)
+	tree_panel.visibility_changed.connect(_on_tree_visibility_changed)
+	tree_button = Button.new()
+	add_child(tree_button)
+	tree_button.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	tree_button.offset_left = 12
+	tree_button.offset_right = 174
+	tree_button.offset_top = -22
+	tree_button.offset_bottom = -6
+	tree_button.add_theme_font_size_override("font_size", 7)
+	tree_button.focus_mode = Control.FOCUS_NONE
+	tree_button.pressed.connect(func(): tree_panel.visible = not tree_panel.visible)
+	player.passive_tree.changed.connect(update_tree_button)
+	update_tree_button()
 	_on_inventory_visibility_changed()
 
 func _on_inventory_visibility_changed() -> void:
+	if inventory.visible and is_instance_valid(tree_panel):
+		tree_panel.hide()
+	sync_menu_pause()
+
+func _on_tree_visibility_changed() -> void:
+	if tree_panel.visible:
+		inventory.hide()
+	sync_menu_pause()
+
+func update_tree_button() -> void:
+	tree_button.text = "T / PASSIVES  +%d" % player.passive_tree.points if player.passive_tree.points > 0 else "T / PASSIVES"
+	tree_button.add_theme_color_override("font_color", Color("8bd5a1") if player.passive_tree.points > 0 else Color("b0c4d0"))
+
+func sync_menu_pause() -> void:
+	var menu_open: bool = inventory.visible or (is_instance_valid(tree_panel) and tree_panel.visible)
 	if is_instance_valid(player):
-		player.inventory_open = inventory.visible
-	if inventory.visible and not get_tree().paused:
+		player.inventory_open = menu_open
+	if menu_open and not get_tree().paused:
 		owns_inventory_pause = true
 		get_tree().paused = true
-	elif not inventory.visible and owns_inventory_pause:
+	elif not menu_open and owns_inventory_pause:
 		get_tree().paused = false
 		owns_inventory_pause = false
 

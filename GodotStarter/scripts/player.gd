@@ -6,6 +6,10 @@ const MELEE_ATTACK = preload("res://scripts/melee_attack.gd")
 const DASH_EFFECT = preload("res://scripts/dash_effect.gd")
 const DASH_TRAIL = preload("res://scripts/dash_trail.gd")
 const PIXELS_PER_METER: float = 16.0 # The player's 16-pixel side is one meter.
+const PASSIVE_TREE = preload("res://scripts/passive_tree.gd")
+var passive_tree = PASSIVE_TREE.new()
+var base_max_health: float = 100.0
+var player_push_duration: float = 0.18
 
 signal experience_changed(current: int, required: int, player_level: int)
 signal damaged(amount: float)
@@ -59,6 +63,8 @@ var knockback_timer: float = 0.0
 @onready var health = $Health
 
 func _ready() -> void:
+	base_max_health = health.max_health
+	passive_tree.changed.connect(_on_passives_changed)
 	base_fill = $Geometry.fill_color
 	base_border = $Geometry.border_color
 	dash_visual = DASH_EFFECT.new()
@@ -76,6 +82,8 @@ func take_damage(amount: float) -> void:
 	if is_dashing():
 		return
 	var before: float = health.current
+	if passive_tree.rank(&"last_stand") > 0 and health.ratio() <= 0.3:
+		amount *= 0.75
 	health.take_damage(amount)
 	var lost: float = before - health.current
 	if lost > 0.0:
@@ -114,13 +122,58 @@ func add_experience(amount: int) -> void:
 	while experience >= experience_per_level:
 		experience -= experience_per_level
 		level += 1
+		passive_tree.award(1)
 	experience_changed.emit(experience, experience_per_level, level)
 
 func apply_knockback(direction: Vector2) -> void:
 	if not is_alive() or is_dashing():
 		return
 	knockback_velocity = direction.normalized() * knockback_speed
-	knockback_timer = knockback_duration
+	player_push_duration = knockback_duration * (1.0 - 0.1 * passive_tree.rank(&"quick_recovery"))
+	knockback_timer = player_push_duration
+
+func _on_passives_changed() -> void:
+	health.max_health = base_max_health * (1.0 + 0.1 * passive_tree.rank(&"vitality"))
+	# Respeccing must not provide a repeatable free heal.
+	health.current = minf(health.current, health.max_health)
+	health.changed.emit(health.current, health.max_health)
+	loadout_changed.emit()
+
+func attack_area_multiplier() -> float:
+	return 1.0 + 0.05 * passive_tree.rank(&"extended_reach")
+
+func launch_duration_multiplier() -> float:
+	return 1.0 + 0.08 * passive_tree.rank(&"driving_force")
+
+func force_multiplier(enemy = null) -> float:
+	var bonus := 0.08 * passive_tree.rank(&"heavy_hands")
+	if is_instance_valid(enemy):
+		if enemy.knockback_timer > 0.0:
+			bonus += 0.1 * passive_tree.rank(&"follow_through")
+		if enemy.mass_multiplier > 1.0:
+			bonus += 0.12 * passive_tree.rank(&"giant_killer")
+	if passive_tree.rank(&"crowd_breaker") > 0:
+		var nearby := 0
+		for body in get_tree().get_nodes_in_group("enemies"):
+			if not body.is_queued_for_deletion() and body.health.current > 0 and global_position.distance_to(body.global_position) <= 48.0:
+				nearby += 1
+		if nearby >= 3:
+			bonus += 0.2
+	return 1.0 + bonus
+
+func collision_damage_multiplier(source, victim, previous_impacts: int) -> float:
+	var bonus := 0.08 * passive_tree.rank(&"hard_knocks")
+	if source.mass_multiplier > 1.0:
+		bonus += 0.3 * passive_tree.rank(&"wrecking_ball")
+	if victim.knockback_timer <= 0.0:
+		bonus += 0.1 * passive_tree.rank(&"fresh_target")
+	if passive_tree.rank(&"domino") > 0:
+		bonus += minf(0.5, previous_impacts * 0.1)
+	return 1.0 + bonus
+
+func collision_kill() -> void:
+	if is_alive():
+		health.heal(passive_tree.rank(&"second_wind"))
 
 func movement_direction() -> Vector2:
 	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -150,10 +203,10 @@ func _physics_process(delta: float) -> void:
 	elif knockback_timer > 0.0:
 		# Restore steering continuously instead of waiting through a near-zero push.
 		knockback_timer = maxf(0.0, knockback_timer - delta)
-		knockback_velocity = knockback_velocity.move_toward(Vector2.ZERO, knockback_speed / maxf(knockback_duration, 0.001) * delta)
+		knockback_velocity = knockback_velocity.move_toward(Vector2.ZERO, knockback_speed / maxf(player_push_duration, 0.001) * delta)
 		if knockback_timer <= 0.0:
 			knockback_velocity = Vector2.ZERO
-		var push_weight := clampf(knockback_timer / maxf(knockback_duration, 0.001), 0.0, 1.0)
+		var push_weight := clampf(knockback_timer / maxf(player_push_duration, 0.001), 0.0, 1.0)
 		velocity = velocity * (1.0 - push_weight) + knockback_velocity
 	var previous_position := global_position
 	move_and_slide()
@@ -184,7 +237,8 @@ func create_melee(kind: StringName, direction: Vector2) -> Node2D:
 	attack.player = self
 	attack.kind = kind
 	attack.direction = direction.normalized()
-	attack.reach = sweep_reach if kind == &"sweep" else palm_reach
+	attack.area_multiplier = attack_area_multiplier()
+	attack.reach = (sweep_reach if kind == &"sweep" else palm_reach) * attack.area_multiplier
 	attack.damage = sweep_damage if kind == &"sweep" else palm_damage
 	attack.knockback_strength = sweep_knockback if kind == &"sweep" else palm_knockback
 	attack.arc_degrees = sweep_angle_degrees
@@ -212,7 +266,7 @@ func try_dash(direction: Vector2) -> bool:
 	return true
 
 func dash_hit_radius(enemy_radius: float = 9.0) -> float:
-	return 8.0 + enemy_radius
+	return 8.0 * attack_area_multiplier() + enemy_radius
 
 func damage_dash_enemies(from: Vector2, to: Vector2) -> void:
 	# Sweep the traveled segment so a quick dash cannot skip a circle between ticks.
@@ -225,7 +279,7 @@ func damage_dash_enemies(from: Vector2, to: Vector2) -> void:
 			dash_hits[enemy.get_instance_id()] = true
 			HIT_BURST.spawn(self, enemy.global_position, dash_direction, maxf(0.0, enemy.body_radius - 2.0))
 			IMPACT_AUDIO.attack_hit(self, enemy.global_position, dash_knockback_speed)
-			enemy.receive_attack(dash_direction, dash_knockback_speed, dash_damage, dash_knockback_duration)
+			enemy.receive_attack(dash_direction, dash_knockback_speed, dash_damage, dash_knockback_duration, self)
 
 func item_list(zone: String) -> Array[StringName]:
 	match zone:

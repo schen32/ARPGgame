@@ -21,3 +21,9 @@ func take_damage(amount: float) -> void:
 
 func ratio() -> float:
 	return clampf(current / max_health, 0.0, 1.0)
+
+func heal(amount: float) -> void:
+	if current <= 0.0 or amount <= 0.0:
+		return
+	current = minf(max_health, current + amount)
+	changed.emit(current, max_health)

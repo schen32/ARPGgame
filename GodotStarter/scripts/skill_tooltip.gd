@@ -78,13 +78,13 @@ func _ready() -> void:
 	match skill:
 		&"sweep":
 			description = "Sweep a wide arc, lightly damaging enemies and launching them into others."
-			stats = [["Damage", number(player.sweep_damage)], ["Force", number(player.sweep_knockback)], ["Reach", number(player.sweep_reach / 16.0) + " m"], ["Cooldown", number(player.sweep_cooldown) + " s"]]
+			stats = [["Damage", number(player.sweep_damage)], ["Force", number(player.sweep_knockback * player.force_multiplier())], ["Reach", number(player.sweep_reach * player.attack_area_multiplier() / 16.0) + " m"], ["Cooldown", number(player.sweep_cooldown) + " s"]]
 		&"palm":
 			description = "After a short windup, launch the nearest enemy with a powerful push."
-			stats = [["Damage", number(player.palm_damage)], ["Force", number(player.palm_knockback)], ["Reach", number(player.palm_reach / 16.0) + " m"], ["Windup", number(player.palm_windup) + " s"], ["Cooldown", number(player.palm_cooldown) + " s"]]
+			stats = [["Damage", number(player.palm_damage)], ["Force", number(player.palm_knockback * player.force_multiplier())], ["Reach", number(player.palm_reach * player.attack_area_multiplier() / 16.0) + " m"], ["Windup", number(player.palm_windup) + " s"], ["Cooldown", number(player.palm_cooldown) + " s"]]
 		&"dash":
 			description = "Dash through enemies to damage and launch them. Invincible during the dash."
-			stats = [["Distance", number(player.dash_speed * player.dash_duration / 16.0) + " m"], ["Damage", number(player.dash_damage)], ["Force", number(player.dash_knockback_speed)], ["Cooldown", number(player.dash_cooldown) + " s"]]
+			stats = [["Distance", number(player.dash_speed * player.dash_duration / 16.0) + " m"], ["Damage", number(player.dash_damage)], ["Force", number(player.dash_knockback_speed * player.force_multiplier())], ["Cooldown", number(player.dash_cooldown) + " s"]]
 		&"attract_exp":
 			description = "Pull nearby EXP orbs toward you."
 			stats = [["Attract range", number(player.exp_attract_range_meters) + " m"]]

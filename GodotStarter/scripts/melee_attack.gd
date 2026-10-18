@@ -8,6 +8,7 @@ var visual: Node2D
 var kind: StringName = &"sweep"
 var direction: Vector2 = Vector2.RIGHT
 var reach: float = 36.0
+var area_multiplier: float = 1.0
 var arc_degrees: float = 100.0
 var damage: float = 4.0
 var knockback_strength: float = 330.0
@@ -64,7 +65,7 @@ func palm_contains(point: Vector2, aim: Vector2, enemy_radius: float = ENEMY_RAD
 	if point.dot(aim) < 0.0:
 		return false
 	var nearest := Geometry2D.get_closest_point_to_segment(point, Vector2.ZERO, aim * reach)
-	return point.distance_to(nearest) <= PALM_HALF_WIDTH + enemy_radius + HITBOX_MARGIN
+	return point.distance_to(nearest) <= PALM_HALF_WIDTH * area_multiplier + enemy_radius + HITBOX_MARGIN
 
 func resolve() -> void:
 	if resolved or not is_instance_valid(player) or not player.is_alive():
@@ -89,7 +90,7 @@ func check_hits() -> void:
 			if not palm_contains(offset, direction, enemy.body_radius):
 				continue
 			var lateral := offset.cross(direction)
-			var radius: float = PALM_HALF_WIDTH + enemy.body_radius + HITBOX_MARGIN
+			var radius: float = PALM_HALF_WIDTH * area_multiplier + enemy.body_radius + HITBOX_MARGIN
 			var entry := offset.dot(direction) - sqrt(maxf(0.0, radius * radius - lateral * lateral))
 			if entry < distance:
 				closest = enemy
@@ -111,11 +112,11 @@ func hit(enemy, aim: Vector2) -> void:
 	hit_ids[enemy.get_instance_id()] = true
 	HIT_BURST.spawn(self, enemy.global_position, aim, maxf(0.0, enemy.body_radius - 2.0))
 	IMPACT_AUDIO.attack_hit(self, enemy.global_position, knockback_strength)
-	enemy.receive_attack(aim, knockback_strength, damage, 0.22 if kind == &"sweep" else 0.35)
+	enemy.receive_attack(aim, knockback_strength, damage, 0.22 if kind == &"sweep" else 0.35, player)
 
 func update_visual() -> void:
 	var progress := clampf((age - windup) / FLASH_DURATION, 0.0, 1.0)
 	var opacity := 1.0 - progress if resolved else 0.2 + 0.4 * clampf(age / maxf(windup, 0.001), 0.0, 1.0)
 	visual.update_effect({"effect_kind": 0 if kind == &"sweep" else 1, "radius": reach,
-		"aim": direction, "half_angle": deg_to_rad(arc_degrees * 0.5), "half_width": PALM_HALF_WIDTH,
+		"aim": direction, "half_angle": deg_to_rad(arc_degrees * 0.5), "half_width": PALM_HALF_WIDTH * area_multiplier,
 		"progress": progress, "opacity": opacity, "windup": not resolved})

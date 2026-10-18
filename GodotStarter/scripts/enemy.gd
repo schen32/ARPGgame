@@ -25,6 +25,8 @@ const IMPACT_DAMAGE_PER_FORCE: float = 0.003
 const IMPACT_RESTITUTION: float = 0.55
 const MAX_CHAIN_TARGETS: int = 8
 var impact_chain: Dictionary = {}
+var launch_owner: WeakRef
+var stagger_timer: float = 0.0
 
 var knockback_velocity: Vector2 = Vector2.ZERO
 var knockback_timer: float = 0.0
@@ -61,8 +63,14 @@ func current_move_speed() -> float:
 func current_contact_damage() -> float:
 	return contact_damage * lerpf(0.4, 1.0, health_ratio())
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, collision_owner = null) -> void:
+	var was_alive: bool = health.current > 0.0
 	health.take_damage(amount)
+	if was_alive and health.current <= 0.0 and is_instance_valid(collision_owner):
+		collision_owner.collision_kill()
+
+func current_launch_owner():
+	return launch_owner.get_ref() if launch_owner != null else null
 
 func _on_depleted() -> void:
 	if splits_on_death:
@@ -82,7 +90,10 @@ func _on_depleted() -> void:
 func _physics_process(delta: float) -> void:
 	velocity = Vector2.ZERO
 	attack_timer = maxf(0.0, attack_timer - delta)
+	stagger_timer = maxf(0.0, stagger_timer - delta)
 	if health.current <= 0.0:
+		return
+	if stagger_timer > 0.0:
 		return
 	var in_contact := false
 	if is_instance_valid(target) and (not target.has_method("is_alive") or target.is_alive()):
@@ -111,6 +122,11 @@ func _physics_process(delta: float) -> void:
 		knockback_velocity = knockback_velocity.move_toward(Vector2.ZERO, knockback_deceleration * delta)
 		if knockback_timer <= 0.0:
 			knockback_velocity = Vector2.ZERO
+			var owner = current_launch_owner()
+			if is_instance_valid(owner):
+				stagger_timer = 0.1 * owner.passive_tree.rank(&"stagger")
+				if stagger_timer > 0.0:
+					velocity = Vector2.ZERO
 		# Chase steering must not add energy to a launched body's collisions.
 		if knockback_timer > 0.0:
 			velocity = knockback_velocity
@@ -132,20 +148,27 @@ func apply_knockback(direction: Vector2, strength: float = -1.0, duration: float
 	if health.current <= 0.0 or is_queued_for_deletion():
 		return
 	impact_chain = {get_instance_id(): true}
+	launch_owner = null
 	# Strength is an impulse (force integrated over the hit), so delta-v = impulse / mass.
 	var speed := (knockback_speed if strength < 0.0 else strength) / current_mass()
 	var existing := knockback_velocity if knockback_timer > 0.0 else Vector2.ZERO
 	set_launch_velocity(existing + direction.normalized() * speed, knockback_duration if duration < 0.0 else duration)
 
 func set_launch_velocity(launch: Vector2, duration: float) -> void:
+	stagger_timer = 0.0
 	knockback_total_duration = maxf(duration, 0.001)
 	knockback_velocity = launch
 	knockback_timer = knockback_total_duration
 	knockback_deceleration = launch.length() / knockback_total_duration
 
-func receive_attack(direction: Vector2, impulse: float, damage: float, duration: float) -> void:
+func receive_attack(direction: Vector2, impulse: float, damage: float, duration: float, attacker = null) -> void:
 	# Snapshot mass at contact, before the same hit changes the HP-based mass.
+	if is_instance_valid(attacker):
+		impulse *= attacker.force_multiplier(self)
+		duration *= attacker.launch_duration_multiplier()
 	apply_knockback(direction, impulse, duration)
+	if is_instance_valid(attacker):
+		launch_owner = weakref(attacker)
 	take_damage(damage)
 
 func transfer_impact(other, launch_velocity: Vector2, normal: Vector2) -> bool:
@@ -162,7 +185,11 @@ func transfer_impact(other, launch_velocity: Vector2, normal: Vector2) -> bool:
 	# motion survives; restitution below one dissipates energy along each chain.
 	var mass := current_mass()
 	var other_mass: float = other.current_mass()
-	var impulse := (1.0 + IMPACT_RESTITUTION) * closing_speed / (1.0 / mass + 1.0 / other_mass)
+	var owner = current_launch_owner()
+	var restitution := IMPACT_RESTITUTION
+	if is_instance_valid(owner):
+		restitution = minf(0.9, restitution + 0.05 * owner.passive_tree.rank(&"carry_through"))
+	var impulse := (1.0 + restitution) * closing_speed / (1.0 / mass + 1.0 / other_mass)
 	var source_after := launch_velocity - normal * impulse / mass
 	var target_after: Vector2 = other.knockback_velocity + normal * impulse / other_mass
 	# Acceleration is the contact's change in velocity / contact time, rather than
@@ -170,11 +197,14 @@ func transfer_impact(other, launch_velocity: Vector2, normal: Vector2) -> bool:
 	var contact_acceleration := impulse / mass / IMPACT_CONTACT_TIME
 	var impact_force := mass * contact_acceleration
 	var damage := impact_force * IMPACT_DAMAGE_PER_FORCE
-	other.take_damage(damage)
-	take_damage(damage)
+	if is_instance_valid(owner):
+		damage *= owner.collision_damage_multiplier(self, other, impact_chain.size() - 2)
+	other.take_damage(damage, owner)
+	take_damage(damage, owner)
 	if not other.is_queued_for_deletion():
 		# Use the pre-hit solution directly; newly lost HP must not amplify this impulse.
-		other.set_launch_velocity(target_after, 0.3)
+		other.set_launch_velocity(target_after, 0.3 * (owner.launch_duration_multiplier() if is_instance_valid(owner) else 1.0))
+		other.launch_owner = launch_owner
 		other.impact_chain = impact_chain
 	knockback_velocity = source_after
 	knockback_deceleration = knockback_velocity.length() / maxf(knockback_timer, 0.001)
