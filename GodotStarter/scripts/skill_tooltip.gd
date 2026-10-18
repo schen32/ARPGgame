@@ -47,7 +47,7 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.size.x = content_width
-	column.add_theme_constant_override("separation", 5)
+	column.add_theme_constant_override("separation", 4)
 	add_child(column)
 	var header := HBoxContainer.new()
 	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -77,14 +77,14 @@ func _ready() -> void:
 	var stats: Array = []
 	match skill:
 		&"sweep":
-			description = "Deal light damage in a wide arc and push enemies toward your aim. Launch them into others for impact damage."
-			stats = [["Damage", number(player.sweep_damage)], ["Reach", number(player.sweep_reach / 16.0) + " m"], ["Cooldown", number(player.sweep_cooldown) + " s"]]
+			description = "Sweep a wide arc, lightly damaging enemies and launching them into others."
+			stats = [["Damage", number(player.sweep_damage)], ["Force", number(player.sweep_knockback)], ["Reach", number(player.sweep_reach / 16.0) + " m"], ["Cooldown", number(player.sweep_cooldown) + " s"]]
 		&"palm":
-			description = "Wind up, then launch the nearest enemy forward with a powerful push. Collisions deal most of the damage."
-			stats = [["Damage", number(player.palm_damage)], ["Reach", number(player.palm_reach / 16.0) + " m"], ["Windup", number(player.palm_windup) + " s"], ["Cooldown", number(player.palm_cooldown) + " s"]]
+			description = "After a short windup, launch the nearest enemy with a powerful push."
+			stats = [["Damage", number(player.palm_damage)], ["Force", number(player.palm_knockback)], ["Reach", number(player.palm_reach / 16.0) + " m"], ["Windup", number(player.palm_windup) + " s"], ["Cooldown", number(player.palm_cooldown) + " s"]]
 		&"dash":
 			description = "Dash through enemies to damage and launch them. Invincible during the dash."
-			stats = [["Distance", number(player.dash_speed * player.dash_duration / 16.0) + " m"], ["Damage", number(player.dash_damage)], ["Cooldown", number(player.dash_cooldown) + " s"]]
+			stats = [["Distance", number(player.dash_speed * player.dash_duration / 16.0) + " m"], ["Damage", number(player.dash_damage)], ["Force", number(player.dash_knockback_speed)], ["Cooldown", number(player.dash_cooldown) + " s"]]
 		&"attract_exp":
 			description = "Pull nearby EXP orbs toward you."
 			stats = [["Attract range", number(player.exp_attract_range_meters) + " m"]]

@@ -28,6 +28,10 @@ func hover(slot: Control, local: Vector2, expected: String) -> void:
 		check(cards[0].size.x <= 180, "Tooltip must keep its compact wrapped width")
 		check(cards[0].get_theme_stylebox("panel").bg_color.a == 1.0, "Card background should be opaque")
 		check(cards[0].get_parent() is CanvasLayer, "Card should have one background, without a native tooltip wrapper")
+		var values: Array = cards[0].find_children("*", "Label", true, false).map(func(item): return item.text)
+		var force_values := {&"sweep": player.sweep_knockback, &"palm": player.palm_knockback, &"dash": player.dash_knockback_speed}
+		if force_values.has(cards[0].skill):
+			check("Force" in values and cards[0].number(force_values[cards[0].skill]) in values, "Active tooltip must show its current force")
 func run_checks() -> void:
 	scene = load("res://scenes/main.tscn").instantiate()
 	root.add_child(scene)
@@ -44,6 +48,8 @@ func run_checks() -> void:
 	var slot = inventory.equipped_slots[0]
 	for point in [Vector2(2, 2), Vector2(30, 2), Vector2(2, 30), Vector2(30, 30), Vector2(16, 16)]:
 		await hover(slot, point, "Sweeping Strike")
+	await hover(inventory.equipped_slots[1], Vector2(16, 16), "Heavy Palm")
+	await hover(inventory.equipped_slots[2], Vector2(16, 16), "Dash")
 	await hover(inventory.passive_slots[0], Vector2(2, 30), "Attract EXP")
 	# Stay beyond the native tooltip delay: it must never create a second popup.
 	for frame in range(75):

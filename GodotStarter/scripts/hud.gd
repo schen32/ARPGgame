@@ -23,6 +23,7 @@ var cooldown_overlays: Array[Panel] = []
 var inventory
 var damage_overlay: ColorRect
 var damage_timer: float = 0.0
+var owns_inventory_pause: bool = false
 
 func panel_style(background: Color, border: Color, radius: int = 5) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -33,6 +34,8 @@ func panel_style(background: Color, border: Color, radius: int = 5) -> StyleBoxF
 	return style
 
 func _ready() -> void:
+	# Inventory input, drag/drop and hover remain live while the world is paused.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	damage_overlay = ColorRect.new()
 	damage_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -113,6 +116,16 @@ func _ready() -> void:
 func _on_inventory_visibility_changed() -> void:
 	if is_instance_valid(player):
 		player.inventory_open = inventory.visible
+	if inventory.visible and not get_tree().paused:
+		owns_inventory_pause = true
+		get_tree().paused = true
+	elif not inventory.visible and owns_inventory_pause:
+		get_tree().paused = false
+		owns_inventory_pause = false
+
+func _exit_tree() -> void:
+	if owns_inventory_pause:
+		get_tree().paused = false
 
 func _process(delta: float) -> void:
 	if damage_timer > 0.0:
