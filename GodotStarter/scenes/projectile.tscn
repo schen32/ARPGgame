@@ -1,0 +1,22 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/projectile.gd" id="1_projectile"]
+[ext_resource type="Script" path="res://scripts/prototype_shape.gd" id="2_shape"]
+
+[sub_resource type="CircleShape2D" id="Shape_projectile"]
+radius = 3.0
+
+[node name="Projectile" type="CharacterBody2D" groups=["projectiles"]]
+collision_layer = 0
+collision_mask = 2
+script = ExtResource("1_projectile")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape_projectile")
+
+[node name="Geometry" type="Node2D" parent="."]
+script = ExtResource("2_shape")
+shape_size = Vector2(6, 6)
+fill_color = Color(0.502, 0.784, 0.937, 1)
+border_color = Color(0.827, 0.925, 1, 1)
+border_width = 0.6

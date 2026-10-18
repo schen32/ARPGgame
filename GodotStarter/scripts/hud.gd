@@ -1,105 +1,104 @@
 extends Control
-## Moonlit Silver HUD, drawn at the project's 640 x 360 logical resolution.
+## Screen-fixed geometric HUD with left mouse, right mouse, and Space skill slots.
 
-const SLOT = preload("res://Art/UI/MoonlitSilver/slot.png")
-const HEALTH_ORB = preload("res://Art/UI/MoonlitSilver/health-orb.png")
-const MANA_ORB = preload("res://Art/UI/MoonlitSilver/mana-orb.png")
-const PORTRAIT = preload("res://Art/UI/cleric-portrait-new.png")
-const SILVER = Color("c8d9ee")
-const CYAN = Color("78d9ff")
-const MAP_RANGE: float = 600.0
+const SHAPE = preload("res://scripts/prototype_shape.gd")
+const EXPERIENCE_BAR = preload("res://scripts/experience_bar.gd")
+const INVENTORY = preload("res://scripts/inventory.gd")
+const SKILL_SLOT = preload("res://scripts/skill_slot.gd")
+const BLUE = Color("80c8ef")
 
 @onready var player = get_node("../../Player")
-var panel: StyleBoxTexture
+
+var hp_gauge
+var exp_bar
+var slots: Array[Panel] = []
+var input_indicators: Array[Label] = []
+var dock: Control
+var projectile_icon
+var cooldown_overlay: Panel
+var cooldown_overlays: Array[Panel] = []
+var inventory
+
+func panel_style(background: Color, border: Color, radius: int = 5) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(radius)
+	return style
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	panel = StyleBoxTexture.new()
-	panel.texture = SLOT
-	for side in [SIDE_LEFT, SIDE_TOP, SIDE_RIGHT, SIDE_BOTTOM]:
-		panel.set_texture_margin(side, 22.0)
-		panel.set_expand_margin(side, 0.0)
-	panel.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
-	panel.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_STRETCH
-	panel.set_content_margin_all(8.0)
-	# Keep the source's corner decorations small at the game's pixel resolution.
-	panel.region_rect = Rect2(0, 0, 139, 141)
+	dock = Control.new()
+	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(dock)
+	dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	dock.offset_left = -76
+	dock.offset_right = 76
+	dock.offset_top = -66
+	dock.offset_bottom = -14
+	hp_gauge = SHAPE.new()
+	hp_gauge.position = Vector2(26, 26)
+	hp_gauge.shape_size = Vector2(44, 44)
+	hp_gauge.fill_color = BLUE
+	hp_gauge.border_color = Color("d3ecff")
+	dock.add_child(hp_gauge)
+	for i in range(3):
+		var slot = SKILL_SLOT.new()
+		slot.player = player
+		slot.zone = "equipped"
+		slot.slot_index = i
+		slot.position = Vector2(64 + i * 28, 18)
+		slot.size = Vector2(22, 22)
+		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_theme_stylebox_override("panel", panel_style(Color.TRANSPARENT, Color("d3ecff"), 3))
+		dock.add_child(slot)
+		slots.append(slot)
+		var indicator := Label.new()
+		indicator.text = ["LMB", "RMB", "SPACE"][i]
+		indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		indicator.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		indicator.add_theme_font_size_override("font_size", 6)
+		indicator.add_theme_color_override("font_color", Color("b0c4d0"))
+		indicator.position = Vector2(0, 24)
+		indicator.size = Vector2(22, 10)
+		indicator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(indicator)
+		# Apply final bounds after the theme's minimum-size update.
+		indicator.set_deferred("size", Vector2(22, 10))
+		input_indicators.append(indicator)
+	projectile_icon = slots[0].icon_root
+	for slot in slots:
+		cooldown_overlays.append(slot.overlay)
+	cooldown_overlay = cooldown_overlays[0]
+	exp_bar = EXPERIENCE_BAR.new()
+	exp_bar.position = Vector2(-2, -2)
+	exp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	exp_bar.size = Vector2(56, 56)
+	dock.add_child(exp_bar)
+	player.health.changed.connect(_on_health_changed)
+	player.experience_changed.connect(_on_experience_changed)
+	_on_health_changed(player.health.current, player.health.max_health)
+	_on_experience_changed(player.experience, player.experience_per_level, player.level)
+	inventory = INVENTORY.new()
+	inventory.player = player
+	add_child(inventory)
+	inventory.visibility_changed.connect(_on_inventory_visibility_changed)
+	_on_inventory_visibility_changed()
+
+func _on_inventory_visibility_changed() -> void:
+	if is_instance_valid(player):
+		player.inventory_open = inventory.visible
 
 func _process(_delta: float) -> void:
-	queue_redraw()
-
-func text_at(at: Vector2, value: String, color: Color = SILVER, font_size: int = 10) -> void:
-	draw_string(ThemeDB.fallback_font, at + Vector2(1, 1), value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color("080c17"))
-	draw_string(ThemeDB.fallback_font, at, value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
-
-func resource_orb(rect: Rect2, texture: Texture2D, ratio: float) -> void:
-	draw_texture_rect(texture, rect, false)
-	# Cover the spent portion inside the glass; leave the silver frame intact.
-	var center := rect.position + Vector2(rect.size.x * 0.63, rect.size.y * 0.49)
-	if texture == MANA_ORB:
-		center = rect.position + Vector2(rect.size.x * 0.37, rect.size.y * 0.49)
-	var radius := rect.size.y * 0.325
-	var waterline := center.y + radius - 2.0 * radius * clampf(ratio, 0.0, 1.0)
-	var points := PackedVector2Array()
-	# Convex circular cap above the waterline, with a flat lower edge.
-	for i in range(65):
-		var angle := TAU * float(i) / 64.0
-		var point := center + Vector2(cos(angle), sin(angle)) * radius
-		if point.y <= waterline:
-			points.append(point)
-	if points.size() >= 3:
-		draw_colored_polygon(points, Color(0.025, 0.045, 0.09, 0.9))
-
-func _draw() -> void:
-	if not is_instance_valid(player) or panel == null:
+	if not is_instance_valid(player) or not is_instance_valid(cooldown_overlay):
 		return
-	var view := get_viewport_rect().size
-	var base := Vector2(view.x * 0.5 - 150.0, view.y - 86.0)
-	resource_orb(Rect2(base, Vector2(96, 83)), HEALTH_ORB, player.health / player.max_health)
-	resource_orb(Rect2(base + Vector2(204, 0), Vector2(96, 83)), MANA_ORB, player.mana / player.max_mana)
-	draw_style_box(panel, Rect2(base + Vector2(92, 22), Vector2(116, 58)))
-	text_at(base + Vector2(111, 45), "CLERIC", CYAN, 12)
-	text_at(base + Vector2(109, 60), "SPACE  Nova", SILVER, 9)
-	text_at(base + Vector2(109, 72), "H  Heal", SILVER, 9)
-	text_at(base + Vector2(40, 47), "%d/%d" % [player.health, player.max_health], Color.WHITE, 10)
-	text_at(base + Vector2(220, 47), "%d/%d" % [player.mana, player.max_mana], Color.WHITE, 10)
-	text_at(base + Vector2(40, 70), "HEALTH", SILVER, 8)
-	text_at(base + Vector2(220, 70), "MANA", SILVER, 8)
-	# Compact cleric portrait leaves the play area visible.
-	draw_style_box(panel, Rect2(10, view.y - 63, 46, 53))
-	draw_texture_rect(PORTRAIT, Rect2(16, view.y - 55, 34, 40), false)
-	text_at(Vector2(12, 19), "MOONLIT GROUNDS", SILVER, 10)
-	draw_minimap(Rect2(view.x - 126, 10, 116, 116))
+	for slot in slots:
+		slot.update_display()
 
-func draw_minimap(rect: Rect2) -> void:
-	draw_style_box(panel, rect)
-	var inner := Rect2(rect.position + Vector2(13, 15), rect.size - Vector2(26, 29))
-	draw_rect(inner, Color("101b29"))
-	# A local, north-up map of the actual floor; grid scrolls with world position.
-	var center := inner.get_center()
-	var scale_factor := inner.size.x / (MAP_RANGE * 2.0)
-	var grid_step := 256.0 * scale_factor
-	var offset := Vector2(fposmod(-player.global_position.x * scale_factor, grid_step), fposmod(-player.global_position.y * scale_factor, grid_step))
-	var x := inner.position.x + offset.x
-	while x < inner.end.x:
-		draw_line(Vector2(x, inner.position.y), Vector2(x, inner.end.y), Color("263847"))
-		x += grid_step
-	var y := inner.position.y + offset.y
-	while y < inner.end.y:
-		draw_line(Vector2(inner.position.x, y), Vector2(inner.end.x, y), Color("263847"))
-		y += grid_step
-	# The room is finite even though the movement sandbox allows leaving it.
-	var room := Rect2(center + (Vector2(-2000, -2000) - player.global_position) * scale_factor, Vector2(4000, 4000) * scale_factor)
-	var visible_room := room.intersection(inner)
-	if visible_room.has_area():
-		draw_rect(visible_room, Color(0.25, 0.42, 0.39, 0.22))
-	for enemy in get_tree().get_nodes_in_group("goblins"):
-		if enemy.is_queued_for_deletion():
-			continue
-		var point: Vector2 = center + (enemy.global_position - player.global_position) * scale_factor
-		if inner.grow(-3).has_point(point):
-			draw_rect(Rect2(point.round() - Vector2(2, 2), Vector2(4, 4)), Color("fa5974"))
-	draw_colored_polygon(PackedVector2Array([center + Vector2(0, -4), center + Vector2(3, 3), center, center + Vector2(-3, 3)]), CYAN)
-	text_at(rect.position + Vector2(53, 12), "N", CYAN, 8)
-	text_at(rect.position + Vector2(17, 126), "600px  |  Enemies: %d" % get_tree().get_nodes_in_group("goblins").size(), SILVER, 8)
+func _on_health_changed(current: float, maximum: float) -> void:
+	hp_gauge.fill_ratio = current / maximum
+
+func _on_experience_changed(current: int, required: int, _player_level: int) -> void:
+	exp_bar.max_value = required
+	exp_bar.value = current
