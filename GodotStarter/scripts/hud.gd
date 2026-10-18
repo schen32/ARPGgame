@@ -14,7 +14,7 @@ var exp_bar
 var slots: Array[Panel] = []
 var input_indicators: Array[Label] = []
 var dock: Control
-var projectile_icon
+var sweep_icon
 var cooldown_overlay: Panel
 var cooldown_overlays: Array[Panel] = []
 var inventory
@@ -67,7 +67,7 @@ func _ready() -> void:
 		# Apply final bounds after the theme's minimum-size update.
 		indicator.set_deferred("size", Vector2(22, 10))
 		input_indicators.append(indicator)
-	projectile_icon = slots[0].icon_root
+	sweep_icon = slots[0].icon_root
 	for slot in slots:
 		cooldown_overlays.append(slot.overlay)
 	cooldown_overlay = cooldown_overlays[0]

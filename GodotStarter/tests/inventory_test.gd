@@ -27,8 +27,8 @@ func run_checks() -> void:
 	inventory._input(key)
 	check(inventory.visible and player.inventory_open, "E should open inventory")
 	check(Rect2(Vector2.ZERO, hud.size).encloses(inventory.get_rect()), "Inventory must fit the visible screen")
-	check(player.try_shoot(player.position + Vector2.RIGHT * 100.0) == null, "Inventory clicks must not fire a projectile")
-	check(player.try_spread(player.position + Vector2.RIGHT * 100.0).is_empty(), "Inventory clicks must not fire shotgun")
+	check(player.try_sweep(player.position + Vector2.RIGHT * 100.0) == null, "Inventory clicks must not sweep")
+	check(player.try_palm(player.position + Vector2.RIGHT * 100.0) == null, "Inventory clicks must not use Heavy Palm")
 	check(not player.try_dash(Vector2.RIGHT), "Space must not dash while inventory is open")
 	key.echo = true
 	inventory._input(key)
@@ -40,7 +40,7 @@ func run_checks() -> void:
 	key.physical_keycode = KEY_ESCAPE
 	inventory._input(key)
 	check(not inventory.visible, "Escape should close inventory")
-	check(player.try_shoot(player.position + Vector2.RIGHT * 100.0) != null, "Closing inventory should restore skill input")
+	check(player.try_sweep(player.position + Vector2.RIGHT * 100.0) != null, "Closing inventory should restore skill input")
 	if "--capture" in OS.get_cmdline_user_args():
 		inventory.show()
 		await process_frame

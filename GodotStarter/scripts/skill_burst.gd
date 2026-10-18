@@ -1,9 +1,9 @@
 extends Node2D
-## Brief directional blue particles for shotgun and dash activation.
+## Brief blue fragments emitted behind the player during dash.
 
 const SHAPE = preload("res://scripts/prototype_shape.gd")
 
-var kind: StringName = &"shotgun"
+var kind: StringName = &"dash"
 var direction: Vector2 = Vector2.RIGHT
 var age: float = 0.0
 var lifetime: float = 0.24
@@ -12,19 +12,18 @@ var origins: Array[Vector2] = []
 
 func _ready() -> void:
 	add_to_group("skill_bursts")
-	add_to_group("dash_bursts" if kind == &"dash" else "shotgun_bursts")
+	add_to_group("dash_bursts")
 	z_index = 2
-	var is_dash := kind == &"dash"
-	lifetime = 0.38 if is_dash else 0.32
-	var count: int = 12 if is_dash else 10
-	var flow := -direction if is_dash else direction
+	lifetime = 0.38
+	var count: int = 12
+	var flow := -direction
 	for i in range(count):
 		var particle = SHAPE.new()
-		particle.shape = 1 if is_dash else 0
+		particle.shape = 1
 		particle.shape_size = Vector2.ONE * randf_range(1.2, 2.6)
 		particle.border_width = 0.0
 		particle.fill_color = Color("80c8ef").lerp(Color("d3ecff"), randf() * 0.6)
-		var origin := flow * randf_range(0.0, 9.0) if is_dash else Vector2.ZERO
+		var origin := flow * randf_range(0.0, 9.0)
 		particle.position = origin
 		add_child(particle)
 		origins.append(origin)

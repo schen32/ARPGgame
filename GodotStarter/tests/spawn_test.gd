@@ -18,14 +18,14 @@ func run_checks() -> void:
 	player.set_physics_process(false)
 	scene.get_node("Enemy").set_physics_process(false)
 	check(get_nodes_in_group("enemies").size() == 1, "Keep the initial enemy")
-	await create_timer(3.8).timeout
-	check(get_nodes_in_group("enemies").size() == 1, "Do not spawn before four seconds")
+	await create_timer(1.8).timeout
+	check(get_nodes_in_group("enemies").size() == 1, "Do not spawn before two seconds")
 	await create_timer(0.3).timeout
-	check(get_nodes_in_group("enemies").size() == 2, "Spawn one enemy after four seconds")
+	check(get_nodes_in_group("enemies").size() == 2, "Spawn one enemy after two seconds")
 	for enemy in get_nodes_in_group("enemies"):
 		enemy.set_physics_process(false)
 	player.position = Vector2(600, 300)
-	await create_timer(4.0).timeout
+	await create_timer(2.0).timeout
 	check(get_nodes_in_group("enemies").size() == 3, "Spawn again after eight seconds")
 	var latest = get_nodes_in_group("enemies").back()
 	latest.set_physics_process(false)
@@ -49,5 +49,5 @@ func run_checks() -> void:
 	scene._on_enemy_spawn_timer_timeout()
 	check(scene.get_node("EnemySpawnTimer").is_stopped(), "Stop spawning after player defeat")
 	check(get_nodes_in_group("enemies").size() == 2, "Do not spawn while player is defeated")
-	print("PASS: four-second repeating spawns, player-relative spawn location, death burst, particle movement/fade/cleanup")
+	print("PASS: two-second repeating spawns, player-relative spawn location, death burst, particle movement/fade/cleanup")
 	quit()

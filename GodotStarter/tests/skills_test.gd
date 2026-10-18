@@ -17,31 +17,14 @@ func run_checks() -> void:
 	await physics_frame
 	var player = scene.get_node("Player")
 	player.set_physics_process(false)
-	var enemies: Array[Node2D] = []
-	for angle in [-8.0, 0.0, 8.0]:
-		var enemy = scene.get_node("Enemy") if angle == 0.0 else load("res://scenes/enemy.tscn").instantiate()
-		if enemy.get_parent() == null:
-			scene.add_child(enemy)
-		enemy.position = Vector2.RIGHT.rotated(deg_to_rad(angle)) * 160.0
-		enemy.set_physics_process(false)
-		enemies.append(enemy)
-	await physics_frame
-	var shots = player.try_spread(Vector2(100, 0))
-	check(shots.size() == 3, "Spread should fire exactly three projectiles")
-	check(shots[0].direction.y < 0.0 and shots[1].direction == Vector2.RIGHT and shots[2].direction.y > 0.0, "Pellets should fan out around the aim direction")
-	check(is_equal_approx(shots[0].direction.y, -shots[2].direction.y), "Spread should be symmetrical")
-	check(player.try_spread(Vector2(100, 0)).is_empty(), "Spread cooldown should block repeated firing")
-	check(get_nodes_in_group("shotgun_bursts").size() == 1, "Shotgun should emit particles only on successful use")
-	var muzzle_burst = get_nodes_in_group("shotgun_bursts")[0]
-	check(muzzle_burst.position.x > player.position.x and muzzle_burst.get_child_count() == 10, "Shotgun burst should emit ahead of the player")
-	check(absf(rad_to_deg(shots[0].direction.angle())) < 10.0, "Shotgun spread should be tighter than ten degrees per side")
-	var single = player.try_shoot(Vector2(0, -100))
-	check(single != null, "Single shot should have an independent cooldown")
-	single.queue_free()
-	await create_timer(0.65).timeout
-	check(get_nodes_in_group("shotgun_bursts").is_empty(), "Shotgun particles should clean up after fading")
-	for enemy in enemies:
-		check(enemy.health.current == 35.0, "Each pellet should hit and deal normal damage")
+	scene.get_node("Enemy").set_physics_process(false)
+	scene.get_node("Enemy").position = Vector2(300, 0)
+	var palm = player.try_palm(Vector2(100, 0))
+	check(palm != null and not palm.resolved, "Palm should start its windup")
+	check(player.try_palm(Vector2(100, 0)) == null, "Palm cooldown must block repeated use")
+	check(player.try_sweep(Vector2(0, -100)) != null, "Sweep should have an independent cooldown")
+	await create_timer(0.4).timeout
+	check(get_nodes_in_group("melee_attacks").is_empty(), "Melee effects should clean up after fading")
 	# A short dash should travel exactly its configured distance without input.
 	var start: Vector2 = player.position
 	check(player.try_dash(Vector2.RIGHT), "Dash should activate")
@@ -82,7 +65,7 @@ func run_checks() -> void:
 	check(player.dash_direction == Vector2.UP, "Space dash should follow movement input")
 	player.apply_knockback(Vector2.LEFT)
 	check(player.dash_timer > 0.0 and player.knockback_timer == 0.0, "Dash should ignore enemy knockback")
-	player.spread_timer = 0.0
-	check(player.try_spread(player.position).is_empty(), "Zero-length aim should not fire or consume cooldown")
-	print("PASS: three-pellet spread, hits/damage, independent cooldowns, dash distance/wall collision, Space input, knockback immunity")
+	player.palm_timer = 0.0
+	check(player.try_palm(player.position) == null, "Zero-length aim should not attack or consume cooldown")
+	print("PASS: melee windup, independent cooldowns, effect cleanup, dash distance/wall collision, Space input, knockback immunity")
 	quit()

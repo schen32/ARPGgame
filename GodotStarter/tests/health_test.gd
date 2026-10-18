@@ -67,7 +67,7 @@ func run_checks() -> void:
 	check(player.get_node("Geometry").fill_ratio == 0.0, "Dead player should be an empty outline")
 	player._physics_process(0.1)
 	check(player.velocity == Vector2.ZERO, "Dead player must stop moving")
-	check(player.try_shoot(Vector2(100, 0)) == null, "Dead player must stop shooting")
+	check(player.try_sweep(Vector2(100, 0)) == null, "Dead player must stop attacking")
 	enemy._physics_process(1.0)
 	check(enemy.velocity == Vector2.ZERO, "Enemy must stop chasing a dead player")
 	enemy.take_damage(1000.0)

@@ -23,24 +23,24 @@ func run_checks() -> void:
 	check(hud.exp_bar.position + hud.exp_bar.size * 0.5 == hud.hp_gauge.position, "EXP semicircle should be centered around HP")
 	check(Rect2(Vector2.ZERO, hud.size).encloses(hud.dock.get_rect()), "HUD dock should stay inside the visible play area")
 	check(hud.mouse_filter == Control.MOUSE_FILTER_IGNORE, "HUD should not intercept aiming input")
-	check(hud.projectile_icon.get_parent() == hud.slots[0], "Projectile skill should occupy the first slot")
+	check(hud.sweep_icon.get_parent() == hud.slots[0], "Sweep skill should occupy the first slot")
 	check(not hud.cooldown_overlay.visible, "Ready skill should have no cooldown mask")
-	var shot = player.try_shoot(player.position + Vector2(100, -100))
-	check(shot != null, "Projectile skill should fire")
+	var shot = player.try_sweep(player.position + Vector2(100, -100))
+	check(shot != null, "Sweep skill should fire")
 	hud._process(0.0)
 	check(hud.cooldown_overlay.visible and is_equal_approx(hud.cooldown_overlay.size.y, 20.0), "Shot should cover the skill with a cooldown mask")
-	player.shot_timer = player.shot_cooldown * 0.5
+	player.sweep_timer = player.sweep_cooldown * 0.5
 	hud._process(0.0)
 	check(is_equal_approx(hud.cooldown_overlay.size.y, 10.0), "Cooldown mask should recede halfway through recovery")
-	player.shot_timer = 0.0
+	player.sweep_timer = 0.0
 	hud._process(0.0)
 	check(not hud.cooldown_overlay.visible, "Cooldown mask should disappear when shooting is ready")
 	check(hud.cooldown_overlays.size() == 3, "Each skill needs an independent cooldown mask")
-	player.try_spread(player.position + Vector2(0, -100))
+	player.try_palm(player.position + Vector2(0, -100))
 	player.try_dash(Vector2.RIGHT)
 	hud._process(0.0)
 	check(hud.cooldown_overlays[1].visible and hud.cooldown_overlays[2].visible and not hud.cooldown_overlays[0].visible, "Spread and dash masks should update independently")
-	player.spread_timer = 0.0
+	player.palm_timer = 0.0
 	player.dash_cooldown_timer = 0.0
 	player.dash_timer = 0.0
 	player.dash_active_this_frame = false
@@ -69,13 +69,13 @@ func run_checks() -> void:
 		visible_enemy.position = Vector2(70, 25)
 		visible_enemy.set_physics_process(false)
 		await create_timer(0.6).timeout
-		player.spread_timer = 0.0
+		player.palm_timer = 0.0
 		player.dash_cooldown_timer = 0.0
-		player.try_spread(player.position + Vector2(100, 0))
+		player.try_palm(player.position + Vector2(100, 0))
 		player.try_dash(Vector2.RIGHT)
 		await create_timer(0.05).timeout
-		player.shot_timer = player.shot_cooldown * 0.5
-		player.spread_timer = player.spread_cooldown * 0.7
+		player.sweep_timer = player.sweep_cooldown * 0.5
+		player.palm_timer = player.palm_cooldown * 0.7
 		player.dash_cooldown_timer = player.dash_cooldown * 0.3
 		hud._process(0.0)
 		await RenderingServer.frame_post_draw

@@ -25,6 +25,7 @@ func run_checks() -> void:
 			contacts += 1
 			if enemy.attack_timer > 1.0 / 60.0:
 				contacts_during_cooldown += 1
+		var expected_damage: float = enemy.current_contact_damage()
 		var hp_before: float = player.health.current
 		var enemy_hp_before: float = enemy.health.current
 		enemy._physics_process(1.0 / 60.0)
@@ -33,7 +34,7 @@ func run_checks() -> void:
 			push_error("Enemy should lose exactly 1 HP on each new contact")
 			quit(1)
 			return
-		if entered_contact and player.health.current != maxf(0.0, hp_before - enemy.contact_damage):
+		if entered_contact and player.health.current != maxf(0.0, hp_before - expected_damage):
 			push_error("Contact %d did not deal damage immediately" % contacts)
 			quit(1)
 			return

@@ -1,8 +1,8 @@
 extends Panel
 ## Shared equipment/inventory slot. Dragging only commits when a valid drop occurs.
 
-const SHAPE = preload("res://scripts/prototype_shape.gd")
-const NAMES = {&"shot": "Blue Shot", &"spread": "Shotgun", &"dash": "Dash"}
+const MELEE_ICON = preload("res://scripts/melee_icon.gd")
+const NAMES = {&"sweep": "Sweeping Strike", &"palm": "Heavy Palm", &"dash": "Dash"}
 
 var player
 var zone: String = "equipped"
@@ -29,30 +29,22 @@ func _ready() -> void:
 func current_skill() -> StringName:
 	return player.skill_at(zone, slot_index) if is_instance_valid(player) else display_skill
 
-func shape(at: Vector2, dimensions: Vector2, square: bool = false) -> void:
-	var icon = SHAPE.new()
-	icon.position = at
-	icon.shape_size = dimensions
-	icon.shape = 1 if square else 0
-	icon.fill_color = Color("80c8ef")
-	icon.border_color = Color("d3ecff")
-	icon.border_width = 0.0 if square else 0.6
-	icon_root.add_child(icon)
-
 func refresh() -> void:
 	for child in icon_root.get_children():
 		child.free()
 	var skill := current_skill()
 	tooltip_text = NAMES.get(skill, "Empty slot")
+	if skill == &"sweep":
+		tooltip_text += "\n100-degree sweep, 2.25m reach, 8 damage. 0.4s cooldown."
+	elif skill == &"palm":
+		tooltip_text += "\nLaunch nearest enemy. 2.7m reach, 12 damage. 0.15s windup, 1s cooldown."
+	elif skill == &"dash":
+		tooltip_text += "\nDash 5m with invincibility and launch enemies. 1.2s cooldown."
 	match skill:
-		&"shot": shape(Vector2.ZERO, Vector2(6, 6))
-		&"spread":
-			for point in [Vector2(-3, -5), Vector2(3, 0), Vector2(-3, 5)]:
-				shape(point, Vector2(4, 4))
-		&"dash":
-			shape(Vector2(3, 0), Vector2(7, 7), true)
-			for y in [-3, 0, 3]:
-				shape(Vector2(-5.5, y), Vector2(5, 1), true)
+		&"sweep", &"palm", &"dash":
+			var icon := MELEE_ICON.new()
+			icon.kind = skill
+			icon_root.add_child(icon)
 	update_display()
 
 func _process(_delta: float) -> void:
@@ -85,7 +77,7 @@ func _can_drop_data(_at: Vector2, data: Variant) -> bool:
 		return false
 	var source_zone: String = data.get("zone", "")
 	var source_index: int = data.get("index", -1)
-	return data.get("skill", &"") != &"" and player.skill_at(source_zone, source_index) == data.get("skill") and (source_zone != zone or source_index != slot_index)
+	return data.get("skill", &"") != &"" and player.skill_at(source_zone, source_index) == data.get("skill") and player.can_move_skill(source_zone, source_index, zone, slot_index)
 
 func _drop_data(at: Vector2, data: Variant) -> void:
 	if _can_drop_data(at, data):

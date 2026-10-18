@@ -41,7 +41,7 @@ func _ready() -> void:
 		equipped.player = player
 		equipped.zone = "equipped"
 		equipped.slot_index = i
-		equipped.position = Vector2(14 + i * 38, 38)
+		equipped.position = Vector2(71 + i * 38, 38)
 		equipped.size = Vector2(32, 32)
 		equipped.add_theme_stylebox_override("panel", slot_style())
 		add_child(equipped)

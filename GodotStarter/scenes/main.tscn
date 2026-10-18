@@ -44,7 +44,7 @@ position_smoothing_enabled = false
 position = Vector2(180, 80)
 
 [node name="EnemySpawnTimer" type="Timer" parent="."]
-wait_time = 4.0
+wait_time = 2.0
 autostart = true
 
 [node name="HUD" type="CanvasLayer" parent="."]
