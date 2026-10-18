@@ -26,3 +26,7 @@
 
 # Unity package cache
 [Pp]ackages/com.unity.*
+
+# Godot generated editor cache
+GodotStarter/.godot/
+.godot-local/

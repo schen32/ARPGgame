@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Asset Workshop · ARPG</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
+<body>
+  <header class="topbar"><a href="/" class="brand"><span class="brand-mark">AW</span> Asset Workshop</a><nav aria-label="Workspace"><button id="connection" class="connection" title="Subscription connection"><i></i><span>Connecting…</span></button><button id="open-history" class="quiet">History <span id="history-count">0</span></button><button id="open-settings" class="quiet">Settings</button></nav></header>
+  <main>
+    <div class="heading"><div><p class="eyebrow">YOUR GAME. ONE VISUAL LANGUAGE.</p><h1>What will you make next?</h1></div><span id="save-status" class="save-status" role="status">All changes saved</span></div>
+    <div class="workspace">
+      <aside class="brief">
+        <section class="reference-section"><div class="section-heading"><h2>References</h2><button id="upload-reference" class="quiet">＋ Add</button></div><p class="hint">The look you want to keep.</p><div id="references" class="reference-grid"></div></section>
+        <details class="style-details"><summary>Style instructions <span>Saved for every asset</span></summary><label for="style" class="sr-only">Style instructions</label><textarea id="style" rows="5" maxlength="8000" placeholder="Describe your palette, outlines, lighting, and materials…"></textarea></details>
+        <section class="description-section"><label for="preset">Asset type</label><select id="preset"></select><label for="description">Describe your asset</label><textarea id="description" rows="3" maxlength="3000" placeholder="A rusty axe with a red cloth grip…"></textarea>
+          <div id="revision" class="revision" hidden><div class="section-heading"><span>Refining selected image</span><button id="cancel-revision" class="quiet">Cancel</button></div><label for="instruction">What should change?</label><textarea id="instruction" rows="3" maxlength="2000" placeholder="Broaden the blade. Keep the grip and lighting."></textarea></div>
+          <button id="generate" class="primary full">Generate <span>↗</span></button><p class="generation-note">One image · Your ChatGPT subscription</p>
+          <div id="connection-help" class="connection-help" hidden><p id="connection-message"></p><button id="retry-connection" class="quiet">Check connection</button></div>
+        </section>
+      </aside>
+      <section class="output" aria-label="Asset preview">
+        <div class="output-heading"><h2 id="result-heading">Your next asset</h2><span id="result-kind" class="hint"></span></div>
+        <div id="stage" class="stage"><div class="empty"><span>◇</span><h3>Your asset starts here.</h3><p>Add references and describe what you want to make.</p></div></div>
+        <div id="progress" class="progress" role="status" hidden><span class="spinner"></span><div>Making your asset…<small>This may take a few minutes.</small></div></div>
+        <div id="result-controls" hidden><div class="result-toolbar"><div class="result-actions"><button id="keep" class="primary">Keep</button><button id="refine" class="secondary">Refine</button><button id="another" class="secondary">Another version</button><button id="download" class="secondary" hidden>Download PNG</button></div><div class="actual-size"><img id="actual-image" alt="Asset at game size"><span id="actual-label"></span></div></div>
+          <details class="export-options"><summary>Export options</summary><div class="export-fields"><div><label for="export-size">Size</label><select id="export-size"><option value="32">32 × 32</option><option value="64">64 × 64</option><option value="128">128 × 128</option><option value="256">256 × 256</option><option value="512">512 × 512</option></select></div><label class="check"><input id="pixelated" type="checkbox"> Pixel art</label><button id="use-reference" class="quiet" hidden>Use as a style reference</button></div></details>
+        </div>
+        <div id="recent" class="recent" aria-label="Recent assets"></div>
+      </section>
+    </div>
+  </main>
+  <footer><span>Made to match your world.</span><span>Saved locally in your project</span></footer>
+  <div id="notice" role="status" hidden></div>
+  <dialog id="history-dialog"><div class="dialog-heading"><h2>Your assets</h2><button class="quiet" data-close="history-dialog">Close</button></div><div class="history-tools"><input id="search" aria-label="Search assets" placeholder="Find an asset…"><select id="history-filter" aria-label="Filter assets"><option value="all">All images</option><option value="kept">Kept</option></select><button id="import-candidate" class="quiet">Import image</button></div><div id="history" class="history-grid"></div></dialog>
+  <dialog id="settings-dialog"><div class="dialog-heading"><h2>Settings</h2><button class="quiet" data-close="settings-dialog">Close</button></div><section><h3>ChatGPT subscription</h3><p id="subscription-message" class="hint">Checking your Codex sign-in…</p><p class="hint">Image generation uses your included Codex limits. API billing is never used by this interface.</p><button id="refresh-subscription" class="secondary">Check connection</button><p class="hint">If needed, run <code>codex login</code> and sign in with ChatGPT.</p></section><details><summary>Add a reference from your game</summary><label for="project-image">Project image</label><select id="project-image"><option value="">Choose an image…</option></select><button id="add-project-reference" class="secondary">Add reference</button></details><details id="prompt-details"><summary>View generation instructions</summary><pre id="prompt-preview">Describe an asset first.</pre></details></dialog>
+  <dialog id="reference-dialog"><div class="dialog-heading"><h2 id="reference-title">Reference</h2><button class="quiet" data-close="reference-dialog">Close</button></div><img id="reference-image" alt="Reference preview" class="reference-preview"><label for="reference-role">Use this image for</label><select id="reference-role"><option value="style">Style — colors, shading, and detail</option><option value="moodboard">Mood — atmosphere and direction</option><option value="composition">Shape — subject, pose, and layout</option></select><button id="remove-reference" class="quiet danger">Remove reference</button></dialog>
+  <input id="reference-file" type="file" accept="image/png,image/jpeg,image/webp" hidden><input id="candidate-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+</body></html>
