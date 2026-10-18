@@ -36,7 +36,7 @@ func run_checks() -> void:
 	for frame in range(15):
 		await physics_frame
 		player._physics_process(1.0 / 60.0)
-	check(enemies[0].health.current == 35.0 and enemies[1].health.current == 35.0, "Dash must damage each crossed enemy once")
+	check(enemies[0].health.current == 60.0 - player.dash_damage and enemies[1].health.current == 60.0 - player.dash_damage, "Dash must damage each crossed enemy once")
 	check(enemies[2].health.current == 60.0, "Dash must not damage enemies away from its path")
 	check(enemies[1].knockback_velocity.length() > enemies[1].knockback_speed * 2.0, "Dash should impart much stronger knockback than standard enemy knockback")
 	check(enemies[1].knockback_total_duration > enemies[1].knockback_duration, "Dash knockback should last longer than standard enemy knockback")
@@ -52,11 +52,13 @@ func run_checks() -> void:
 	player.try_dash(Vector2.RIGHT)
 	await physics_frame
 	player._physics_process(1.0 / 60.0)
-	check(enemies[0].health.current == 10.0 and enemies[1].health.current == 10.0, "Fast dash must hit enemies between physics positions")
+	check(enemies[0].health.current == 60.0 - 2 * player.dash_damage and enemies[1].health.current == 60.0 - 2 * player.dash_damage, "Fast dash must hit enemies between physics positions")
 	check(player.is_dashing(), "Invincibility must cover the final movement tick")
 	await physics_frame
 	player._physics_process(1.0 / 60.0)
 	check(not player.is_dashing(), "Final-tick protection should not persist after dash")
+	enemies[0].take_damage(enemies[0].health.current - player.dash_damage)
+	enemies[1].take_damage(enemies[1].health.current - player.dash_damage)
 	player.position = Vector2.ZERO
 	player.dash_cooldown_timer = 0.0
 	player.try_dash(Vector2.RIGHT)
@@ -89,5 +91,7 @@ func run_checks() -> void:
 		await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://../.codex/dash-preview.png")
+	# Allow one-shot audio playback to drain before engine shutdown.
+	await create_timer(0.3).timeout
 	print("PASS: dash invincibility, knockback immunity, per-enemy damage, swept hits, final-tick protection, normal damage recovery, kill rewards")
 	quit()

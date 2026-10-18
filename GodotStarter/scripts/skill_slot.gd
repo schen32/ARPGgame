@@ -1,8 +1,9 @@
 extends Panel
 ## Shared equipment/inventory slot. Dragging only commits when a valid drop occurs.
 
+const TOOLTIP = preload("res://scripts/skill_tooltip.gd")
 const MELEE_ICON = preload("res://scripts/melee_icon.gd")
-const NAMES = {&"sweep": "Sweeping Strike", &"palm": "Heavy Palm", &"dash": "Dash"}
+static var tooltip_owner: WeakRef
 
 var player
 var zone: String = "equipped"
@@ -10,6 +11,8 @@ var slot_index: int = 0
 var display_skill: StringName = &""
 var icon_root: Node2D
 var overlay: Panel
+var tooltip_layer: CanvasLayer
+var hover_card: Control
 
 func _ready() -> void:
 	icon_root = Node2D.new()
@@ -30,18 +33,14 @@ func current_skill() -> StringName:
 	return player.skill_at(zone, slot_index) if is_instance_valid(player) else display_skill
 
 func refresh() -> void:
+	clear_tooltip()
 	for child in icon_root.get_children():
 		child.free()
 	var skill := current_skill()
-	tooltip_text = NAMES.get(skill, "Empty slot")
-	if skill == &"sweep":
-		tooltip_text += "\n100-degree sweep, 2.25m reach, 8 damage. 0.4s cooldown."
-	elif skill == &"palm":
-		tooltip_text += "\nLaunch nearest enemy. 2.7m reach, 12 damage. 0.15s windup, 1s cooldown."
-	elif skill == &"dash":
-		tooltip_text += "\nDash 5m with invincibility and launch enemies. 1.2s cooldown."
+	# Empty text disables Godot's native delayed tooltip entirely.
+	tooltip_text = ""
 	match skill:
-		&"sweep", &"palm", &"dash":
+		&"sweep", &"palm", &"dash", &"attract_exp":
 			var icon := MELEE_ICON.new()
 			icon.kind = skill
 			icon_root.add_child(icon)
@@ -49,17 +48,70 @@ func refresh() -> void:
 
 func _process(_delta: float) -> void:
 	update_display()
+	update_tooltip()
+
+func _exit_tree() -> void:
+	if tooltip_owner != null and tooltip_owner.get_ref() == self:
+		tooltip_owner = null
+
+func clear_tooltip() -> void:
+	if is_instance_valid(tooltip_layer):
+		tooltip_layer.free()
+	tooltip_layer = null
+	hover_card = null
+	if tooltip_owner != null and tooltip_owner.get_ref() == self:
+		tooltip_owner = null
+
+func update_tooltip() -> void:
+	var hovered := get_viewport().gui_get_hovered_control()
+	var show_card := is_instance_valid(player) and is_visible_in_tree() and not get_viewport().gui_is_dragging()
+	show_card = show_card and current_skill() != &""
+	show_card = show_card and Rect2(Vector2.ZERO, size).has_point(get_local_mouse_position())
+	show_card = show_card and (not is_instance_valid(hovered) or hovered == self or is_ancestor_of(hovered))
+	if not show_card:
+		clear_tooltip()
+		return
+	var previous = tooltip_owner.get_ref() if tooltip_owner != null else null
+	if is_instance_valid(previous) and previous != self:
+		previous.clear_tooltip()
+	tooltip_owner = weakref(self)
+	if not is_instance_valid(hover_card):
+		tooltip_layer = CanvasLayer.new()
+		tooltip_layer.layer = 100
+		add_child(tooltip_layer)
+		hover_card = build_tooltip()
+		tooltip_layer.add_child(hover_card)
+		hover_card.reset_size()
+	# Anchor beside the slot so pointer movement never interrupts the description.
+	var rect := get_global_transform_with_canvas() * Rect2(Vector2.ZERO, size)
+	var bounds := get_viewport_rect().size
+	var card_position := Vector2(rect.end.x + 6, rect.position.y)
+	if card_position.x + hover_card.size.x > bounds.x - 6:
+		card_position.x = rect.position.x - hover_card.size.x - 6
+	card_position.x = clampf(card_position.x, 6, maxf(6, bounds.x - hover_card.size.x - 6))
+	card_position.y = clampf(card_position.y, 6, maxf(6, bounds.y - hover_card.size.y - 6))
+	hover_card.position = card_position
 
 func update_display() -> void:
 	if not is_instance_valid(icon_root):
 		return
 	icon_root.position = size * 0.5
-	mouse_filter = Control.MOUSE_FILTER_STOP if is_instance_valid(player) and player.inventory_open else Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if is_instance_valid(player):
+		mouse_filter = Control.MOUSE_FILTER_STOP if player.inventory_open else Control.MOUSE_FILTER_PASS
 	var cooldown: Vector2 = player.skill_cooldown(current_skill()) if is_instance_valid(player) else Vector2.ZERO
 	var remaining := clampf(cooldown.x / maxf(cooldown.y, 0.001), 0.0, 1.0)
 	overlay.visible = remaining > 0.0
 	overlay.position = Vector2(1, 1 + (size.y - 2) * (1.0 - remaining))
 	overlay.size = Vector2(size.x - 2, (size.y - 2) * remaining)
+
+func build_tooltip() -> Control:
+	var card := TOOLTIP.new()
+	card.player = player
+	card.skill = current_skill()
+	card.zone = zone
+	card.slot_index = slot_index
+	return card
 
 func _get_drag_data(_at: Vector2) -> Variant:
 	if not is_instance_valid(player) or not player.inventory_open or current_skill() == &"":

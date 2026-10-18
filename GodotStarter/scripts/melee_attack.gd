@@ -1,11 +1,15 @@
 extends Node2D
 ## One committed attack: locked aim, one hit per enemy, brief geometric feedback.
+const HIT_BURST = preload("res://scripts/hit_burst.gd")
+const VISUAL = preload("res://scripts/attack_visual.gd")
+const IMPACT_AUDIO = preload("res://scripts/impact_audio.gd")
 var player
+var visual: Node2D
 var kind: StringName = &"sweep"
 var direction: Vector2 = Vector2.RIGHT
 var reach: float = 36.0
 var arc_degrees: float = 100.0
-var damage: float = 8.0
+var damage: float = 4.0
 var knockback_strength: float = 330.0
 var windup: float = 0.0
 var resolved: bool = false
@@ -21,11 +25,13 @@ const FLASH_DURATION: float = 0.18
 func _ready() -> void:
 	add_to_group("melee_attacks")
 	z_index = 3
+	visual = VISUAL.new()
+	add_child(visual)
 
 func start() -> void:
 	if windup <= 0.0:
 		resolve()
-	queue_redraw()
+	update_visual()
 
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(player) or not player.is_alive():
@@ -40,37 +46,38 @@ func _physics_process(delta: float) -> void:
 		resolve()
 	elif resolved:
 		check_hits()
-	queue_redraw()
+	update_visual()
 
-func sweep_contains(point: Vector2) -> bool:
+func sweep_contains(point: Vector2, enemy_radius: float = ENEMY_RADIUS) -> bool:
 	var half_angle := deg_to_rad(arc_degrees * 0.5)
-	if absf(direction.angle_to(point)) <= half_angle and point.length() <= reach + ENEMY_RADIUS + HITBOX_MARGIN:
+	if absf(direction.angle_to(point)) <= half_angle and point.length() <= reach + enemy_radius + HITBOX_MARGIN:
 		return true
 	# Intersect the enemy circle with the sector's two straight edges too.
 	for side in [-1.0, 1.0]:
 		var edge := direction.rotated(half_angle * side) * reach
 		var nearest := Geometry2D.get_closest_point_to_segment(point, Vector2.ZERO, edge)
-		if point.distance_to(nearest) <= ENEMY_RADIUS + HITBOX_MARGIN:
+		if point.distance_to(nearest) <= enemy_radius + HITBOX_MARGIN:
 			return true
 	return false
 
-func palm_contains(point: Vector2, aim: Vector2) -> bool:
+func palm_contains(point: Vector2, aim: Vector2, enemy_radius: float = ENEMY_RADIUS) -> bool:
 	if point.dot(aim) < 0.0:
 		return false
 	var nearest := Geometry2D.get_closest_point_to_segment(point, Vector2.ZERO, aim * reach)
-	return point.distance_to(nearest) <= PALM_HALF_WIDTH + ENEMY_RADIUS + HITBOX_MARGIN
+	return point.distance_to(nearest) <= PALM_HALF_WIDTH + enemy_radius + HITBOX_MARGIN
 
 func resolve() -> void:
 	if resolved or not is_instance_valid(player) or not player.is_alive():
 		return
 	resolved = true
+	IMPACT_AUDIO.melee_use(self, global_position, kind)
 	check_hits()
 
 func check_hits() -> void:
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	if kind == &"sweep":
 		for enemy in enemies:
-			if valid_enemy(enemy) and sweep_contains(enemy.global_position - global_position):
+			if valid_enemy(enemy) and sweep_contains(enemy.global_position - global_position, enemy.body_radius):
 				hit(enemy, direction)
 	elif not palm_hit:
 		var closest = null
@@ -79,10 +86,10 @@ func check_hits() -> void:
 			if not valid_enemy(enemy):
 				continue
 			var offset: Vector2 = enemy.global_position - global_position
-			if not palm_contains(offset, direction):
+			if not palm_contains(offset, direction, enemy.body_radius):
 				continue
 			var lateral := offset.cross(direction)
-			var radius := PALM_HALF_WIDTH + ENEMY_RADIUS + HITBOX_MARGIN
+			var radius: float = PALM_HALF_WIDTH + enemy.body_radius + HITBOX_MARGIN
 			var entry := offset.dot(direction) - sqrt(maxf(0.0, radius * radius - lateral * lateral))
 			if entry < distance:
 				closest = enemy
@@ -102,30 +109,13 @@ func hit(enemy, aim: Vector2) -> void:
 	if not get_world_2d().direct_space_state.intersect_ray(query).is_empty():
 		return
 	hit_ids[enemy.get_instance_id()] = true
-	enemy.take_damage(damage)
-	if not enemy.is_queued_for_deletion():
-		enemy.apply_knockback(aim, knockback_strength, 0.22 if kind == &"sweep" else 0.35)
+	HIT_BURST.spawn(self, enemy.global_position, aim, maxf(0.0, enemy.body_radius - 2.0))
+	IMPACT_AUDIO.attack_hit(self, enemy.global_position, knockback_strength)
+	enemy.receive_attack(aim, knockback_strength, damage, 0.22 if kind == &"sweep" else 0.35)
 
-func _draw() -> void:
-	var color := Color("80c8ef")
+func update_visual() -> void:
 	var progress := clampf((age - windup) / FLASH_DURATION, 0.0, 1.0)
-	if not resolved:
-		color.a = 0.2 + 0.4 * clampf(age / maxf(windup, 0.001), 0.0, 1.0)
-	else:
-		color.a = 1.0 - progress
-	if kind == &"sweep":
-		var center := direction.angle()
-		var half := deg_to_rad(arc_degrees * 0.5)
-		var points := PackedVector2Array([Vector2.ZERO])
-		for i in range(25):
-			points.append(Vector2.RIGHT.rotated(center - half + 2.0 * half * i / 24.0) * reach)
-		draw_colored_polygon(points, Color(color, color.a * 0.12))
-		draw_arc(Vector2.ZERO, reach, center - half, center + half, 32, color, 2.0, true)
-		var tip := Vector2.RIGHT.rotated(center - half + progress * half * 2.0) * reach
-		draw_line(tip * 0.45, tip, Color(color, color.a * 0.8), 3.0, true)
-	else:
-		var tip := direction * reach
-		draw_line(direction * 8.0, tip, Color(color, color.a * 0.35), PALM_HALF_WIDTH * 2.0, true)
-		draw_line(direction * 8.0, tip, color, 1.0 if not resolved else 3.0, true)
-		var side := direction.orthogonal() * PALM_HALF_WIDTH
-		draw_line(tip - side, tip + side, color, 2.0, true)
+	var opacity := 1.0 - progress if resolved else 0.2 + 0.4 * clampf(age / maxf(windup, 0.001), 0.0, 1.0)
+	visual.update_effect({"effect_kind": 0 if kind == &"sweep" else 1, "radius": reach,
+		"aim": direction, "half_angle": deg_to_rad(arc_degrees * 0.5), "half_width": PALM_HALF_WIDTH,
+		"progress": progress, "opacity": opacity, "windup": not resolved})

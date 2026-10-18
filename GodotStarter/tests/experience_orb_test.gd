@@ -1,4 +1,5 @@
 extends SceneTree
+var pickup_sounds: Array = []
 
 func _initialize() -> void:
 	call_deferred("run_checks")
@@ -16,6 +17,10 @@ func run_checks() -> void:
 	await process_frame
 	scene.get_node("EnemySpawnTimer").stop()
 	var player = scene.get_node("Player")
+	var audio = scene.get_node("ImpactAudio")
+	audio.sound_played.connect(func(kind, at, _strength):
+		if kind == &"exp":
+			pickup_sounds.append(at))
 	player.set_physics_process(false)
 	var enemy = scene.get_node("Enemy")
 	enemy.position = Vector2(80, 0)
@@ -42,11 +47,15 @@ func run_checks() -> void:
 	orb._physics_process(1.0)
 	check(orb.collected and orb.is_queued_for_deletion(), "Orb should collect without overshooting player")
 	check(player.experience == 25, "Collection should grant the stored EXP")
+	check(pickup_sounds == [player.global_position], "Collection should play one EXP chime at the player")
+	check(audio.voices.any(func(voice): return voice.stream == audio.EXP_SOUND and voice.playing), "Pickup must start actual chime playback")
 	check(get_nodes_in_group("pickup_bursts").size() == 1, "Pickup should create one green burst")
 	var burst = get_nodes_in_group("pickup_bursts")[0]
 	check(burst.global_position == player.global_position, "Pickup effect should originate at player")
 	check(burst.get_child(0).fill_color == orb.get_node("Geometry").fill_color, "Pickup particles should match orb green")
 	orb._physics_process(1.0)
+	orb.collect()
+	check(pickup_sounds.size() == 1, "A collected orb must never repeat its chime")
 	check(player.experience == 25, "Orb must not grant EXP twice")
 	check(get_nodes_in_group("pickup_bursts").size() == 1, "Orb must not emit pickup effects twice")
 	# The base range can be increased later through the player Inspector property.

@@ -39,6 +39,6 @@ func run_checks() -> void:
 		latest.set_physics_process(false)
 		for other in enemies:
 			if other != latest:
-				check(other.position.distance_to(latest.position) >= 17.9, "New enemies must not spawn overlapping")
+				check(other.position.distance_to(latest.position) >= other.body_radius + latest.body_radius + 1.9, "New enemies must not spawn overlapping")
 	print("PASS: enemy collisions while chasing and knocked back, clear spawn positions")
 	quit()

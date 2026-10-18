@@ -26,7 +26,7 @@ func run_checks() -> void:
 		enemy.set_physics_process(false)
 	player.position = Vector2(600, 300)
 	await create_timer(2.0).timeout
-	check(get_nodes_in_group("enemies").size() == 3, "Spawn again after eight seconds")
+	check(get_nodes_in_group("enemies").size() == 3, "Spawn again after four seconds")
 	var latest = get_nodes_in_group("enemies").back()
 	latest.set_physics_process(false)
 	check(absf(latest.global_position.distance_to(player.global_position) - scene.spawn_radius) < 10.0, "Spawn around the player's current position")

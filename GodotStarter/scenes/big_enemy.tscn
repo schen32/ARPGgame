@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="1_enemy"]
+
+[node name="BigEnemy" instance=ExtResource("1_enemy")]
+body_radius = 18.0
+mass_multiplier = 2.0
+move_speed = 32.0
+stop_distance = 29.0
+contact_damage = 15.0
+splits_on_death = true
+experience_reward = 25
+
+[node name="Health" parent="." index="0"]
+max_health = 120.0

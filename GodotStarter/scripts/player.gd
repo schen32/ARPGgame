@@ -1,11 +1,14 @@
 extends CharacterBody2D
 
+const HIT_BURST = preload("res://scripts/hit_burst.gd")
+const IMPACT_AUDIO = preload("res://scripts/impact_audio.gd")
 const MELEE_ATTACK = preload("res://scripts/melee_attack.gd")
 const DASH_EFFECT = preload("res://scripts/dash_effect.gd")
-const SKILL_BURST = preload("res://scripts/skill_burst.gd")
+const DASH_TRAIL = preload("res://scripts/dash_trail.gd")
 const PIXELS_PER_METER: float = 16.0 # The player's 16-pixel side is one meter.
 
 signal experience_changed(current: int, required: int, player_level: int)
+signal damaged(amount: float)
 signal loadout_changed
 
 @export var move_speed: float = 180.0
@@ -13,22 +16,27 @@ signal loadout_changed
 @export var palm_cooldown: float = 1.0
 @export var sweep_reach: float = 36.0
 @export var sweep_angle_degrees: float = 100.0
-@export var sweep_damage: float = 8.0
+@export var sweep_damage: float = 4.0
 @export var sweep_knockback: float = 330.0
 @export var palm_reach: float = 43.2
 @export var palm_windup: float = 0.15
-@export var palm_damage: float = 12.0
+@export var palm_damage: float = 6.0
 @export var palm_knockback: float = 975.0
 @export var dash_cooldown: float = 1.2
 @export var dash_speed: float = 400.0
 @export var dash_duration: float = 0.2
-@export var dash_damage: float = 25.0
+@export var dash_damage: float = 8.0
 @export var dash_knockback_speed: float = 975.0
 @export var dash_knockback_duration: float = 0.35
 @export var knockback_speed: float = 320.0
 @export var knockback_duration: float = 0.18
 @export_range(1, 10000) var experience_per_level: int = 100
 @export_range(0.0, 20.0, 0.1) var exp_attract_range_meters: float = 2.0
+
+const DAMAGE_FLASH_DURATION: float = 0.22
+var damage_flash_timer: float = 0.0
+var base_fill: Color
+var base_border: Color
 
 var experience: int = 0
 var level: int = 1
@@ -42,6 +50,7 @@ var dash_active_this_frame: bool = false
 var dash_hits: Dictionary = {}
 var inventory_open: bool = false
 var equipped_skills: Array[StringName] = [&"sweep", &"palm", &"dash"]
+var equipped_passives: Array[StringName] = [&"attract_exp", &"", &""]
 var dash_visual: Node2D
 var inventory_skills: Array[StringName] = []
 var knockback_velocity: Vector2 = Vector2.ZERO
@@ -50,6 +59,8 @@ var knockback_timer: float = 0.0
 @onready var health = $Health
 
 func _ready() -> void:
+	base_fill = $Geometry.fill_color
+	base_border = $Geometry.border_color
 	dash_visual = DASH_EFFECT.new()
 	dash_visual.player = self
 	add_child(dash_visual)
@@ -64,7 +75,23 @@ func _on_health_changed(current: float, maximum: float) -> void:
 func take_damage(amount: float) -> void:
 	if is_dashing():
 		return
+	var before: float = health.current
 	health.take_damage(amount)
+	var lost: float = before - health.current
+	if lost > 0.0:
+		damage_flash_timer = DAMAGE_FLASH_DURATION
+		update_damage_flash()
+		damaged.emit(lost)
+
+func _process(delta: float) -> void:
+	if damage_flash_timer > 0.0:
+		damage_flash_timer = maxf(0.0, damage_flash_timer - delta)
+		update_damage_flash()
+
+func update_damage_flash() -> void:
+	var intensity := damage_flash_timer / DAMAGE_FLASH_DURATION
+	$Geometry.fill_color = base_fill.lerp(Color("fff3e8"), intensity)
+	$Geometry.border_color = base_border.lerp(Color("ff645e"), intensity)
 
 func is_dashing() -> bool:
 	return dash_timer > 0.0 or dash_active_this_frame
@@ -73,7 +100,12 @@ func is_alive() -> bool:
 	return health.current > 0.0
 
 func get_exp_attract_radius() -> float:
-	return exp_attract_range_meters * PIXELS_PER_METER
+	return exp_attract_range_meters * PIXELS_PER_METER if &"attract_exp" in equipped_passives else 0.0
+
+func overlaps_exp_orb(at: Vector2, orb_radius: float = 2.5) -> bool:
+	# Circle versus the player's actual 16px square, including corner contacts.
+	var nearest := (to_local(at).abs() - Vector2.ONE * 8.0).max(Vector2.ZERO)
+	return nearest.length() <= orb_radius
 
 func add_experience(amount: int) -> void:
 	if amount <= 0 or not is_alive():
@@ -172,29 +204,33 @@ func try_dash(direction: Vector2) -> bool:
 	dash_cooldown_timer = dash_cooldown
 	knockback_timer = 0.0
 	knockback_velocity = Vector2.ZERO
-	emit_skill_burst(&"dash", dash_direction)
+	var trail := DASH_TRAIL.new()
+	trail.player = self
+	get_parent().add_child(trail)
+	IMPACT_AUDIO.dash_start(self, global_position)
 	dash_visual.update_display()
 	return true
 
-func dash_hit_radius() -> float:
-	return 17.0
+func dash_hit_radius(enemy_radius: float = 9.0) -> float:
+	return 8.0 + enemy_radius
 
 func damage_dash_enemies(from: Vector2, to: Vector2) -> void:
 	# Sweep the traveled segment so a quick dash cannot skip a circle between ticks.
-	# Hit radius combines the player's 8px half-width with the enemy's 9px radius.
+	# Combine the player's 8px half-width with each enemy's actual radius.
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy.is_queued_for_deletion() or dash_hits.has(enemy.get_instance_id()):
 			continue
 		var closest := Geometry2D.get_closest_point_to_segment(enemy.global_position, from, to)
-		if enemy.global_position.distance_to(closest) <= dash_hit_radius():
+		if enemy.global_position.distance_to(closest) <= dash_hit_radius(enemy.body_radius):
 			dash_hits[enemy.get_instance_id()] = true
-			enemy.take_damage(dash_damage)
-			if not enemy.is_queued_for_deletion():
-				enemy.apply_knockback(dash_direction, dash_knockback_speed, dash_knockback_duration)
+			HIT_BURST.spawn(self, enemy.global_position, dash_direction, maxf(0.0, enemy.body_radius - 2.0))
+			IMPACT_AUDIO.attack_hit(self, enemy.global_position, dash_knockback_speed)
+			enemy.receive_attack(dash_direction, dash_knockback_speed, dash_damage, dash_knockback_duration)
 
 func item_list(zone: String) -> Array[StringName]:
 	match zone:
 		"equipped": return equipped_skills
+		"passive": return equipped_passives
 		"inventory": return inventory_skills
 	return []
 
@@ -203,7 +239,11 @@ func skill_at(zone: String, index: int) -> StringName:
 	return list[index] if index >= 0 and index < list.size() else &""
 
 func accepts_item(zone: String, item: StringName) -> bool:
-	return zone in ["inventory", "equipped"] and item in [&"", &"sweep", &"palm", &"dash"]
+	match zone:
+		"inventory": return item in [&"", &"sweep", &"palm", &"dash", &"attract_exp"]
+		"equipped": return item in [&"", &"sweep", &"palm", &"dash"]
+		"passive": return item in [&"", &"attract_exp"]
+	return false
 
 func can_move_skill(from_zone: String, from_index: int, to_zone: String, to_index: int) -> bool:
 	var source := item_list(from_zone)
@@ -242,10 +282,3 @@ func activate_skill(index: int, aim_position: Vector2) -> bool:
 				direction = aim_position - global_position
 			return try_dash(direction)
 	return false
-
-func emit_skill_burst(kind: StringName, direction: Vector2) -> void:
-	var burst := SKILL_BURST.new()
-	burst.kind = kind
-	burst.direction = direction
-	burst.position = position
-	get_parent().add_child(burst)

@@ -29,9 +29,7 @@ func run_checks() -> void:
 	var start: Vector2 = player.position
 	check(player.try_dash(Vector2.RIGHT), "Dash should activate")
 	check(not player.try_dash(Vector2.UP), "Dash cooldown should block another dash")
-	check(get_nodes_in_group("dash_bursts").size() == 1, "Dash should emit particles only on successful use")
-	var dash_burst = get_nodes_in_group("dash_bursts")[0]
-	check(dash_burst.position == player.position and dash_burst.velocities[0].x < 0.0, "Dash particles should scatter behind the player")
+	check(get_nodes_in_group("dash_trails").size() == 1, "Only a successful dash should create an afterimage trail")
 	for frame in range(15):
 		await physics_frame
 		player._physics_process(1.0 / 60.0)
@@ -67,5 +65,7 @@ func run_checks() -> void:
 	check(player.dash_timer > 0.0 and player.knockback_timer == 0.0, "Dash should ignore enemy knockback")
 	player.palm_timer = 0.0
 	check(player.try_palm(player.position) == null, "Zero-length aim should not attack or consume cooldown")
+	# Allow one-shot audio playback to drain before engine shutdown.
+	await create_timer(0.3).timeout
 	print("PASS: melee windup, independent cooldowns, effect cleanup, dash distance/wall collision, Space input, knockback immunity")
 	quit()

@@ -35,11 +35,11 @@ func run_checks() -> void:
 	var behind = enemy_at(Vector2(-25, 0))
 	var far = enemy_at(Vector2(50, 0))
 	var sweep = player.try_sweep(Vector2(100, 0))
-	check(sweep != null and front.health.current == 52 and side.health.current == 52, "Sweep should hit multiple enemies in its short forward arc")
+	check(sweep != null and front.health.current == 60 - player.sweep_damage and side.health.current == 60 - player.sweep_damage, "Sweep should hit multiple enemies in its short forward arc")
 	check(behind.health.current == 60 and far.health.current == 60, "Sweep must exclude rear and distant enemies")
 	check(front.knockback_velocity.x > 0 and side.knockback_velocity.x > 0 and is_zero_approx(side.knockback_velocity.y), "Sweep must push the group toward aim, rather than scatter radially")
 	sweep.resolve()
-	check(front.health.current == 52, "One swing must never hit an enemy twice")
+	check(front.health.current == 60 - player.sweep_damage, "One swing must never hit an enemy twice")
 	check(player.try_sweep(Vector2(100, 0)) == null and player.sweep_timer == 0.4, "Sweep cooldown must block held-button spam")
 	clear_combat()
 	await process_frame
@@ -53,8 +53,8 @@ func run_checks() -> void:
 	check(front.health.current == 60, "Palm must respect 0.15s windup")
 	# The palm retains its initial aim during windup.
 	palm._physics_process(0.02)
-	check(front.health.current == 48 and rear.health.current == 60 and side.health.current == 60, "Base palm must strike only nearest enemy in narrow lane")
-	check(front.knockback_velocity.x > player.palm_knockback, "Palm launch must respect wounded mass")
+	check(front.health.current == 60 - player.palm_damage and rear.health.current == 60 and side.health.current == 60, "Base palm must strike only nearest enemy in narrow lane")
+	check(is_equal_approx(front.knockback_velocity.x, player.palm_knockback), "Palm launch must use mass at contact before direct damage")
 	check(player.try_palm(Vector2(100, 0)) == null, "Palm must have a longer cooldown")
 	clear_combat()
 	await process_frame
@@ -81,10 +81,10 @@ func run_checks() -> void:
 	check(front.health.current == 60, "Enemy should begin outside enlarged sweep")
 	player.position = Vector2(30, 0)
 	sweep._physics_process(0.04)
-	check(sweep.global_position == player.global_position and front.health.current == 52, "Moving sweep must stay centered and hit enemies entering its active arc")
+	check(sweep.global_position == player.global_position and front.health.current == 60 - player.sweep_damage, "Moving sweep must stay centered and hit enemies entering its active arc")
 	player.position = Vector2(32, 0)
 	sweep._physics_process(0.04)
-	check(sweep.global_position == player.global_position and front.health.current == 52, "Moving sweep must not repeatedly damage the same enemy")
+	check(sweep.global_position == player.global_position and front.health.current == 60 - player.sweep_damage, "Moving sweep must not repeatedly damage the same enemy")
 	clear_combat()
 	await process_frame
 	front = enemy_at(Vector2(80, 0))
@@ -96,21 +96,21 @@ func run_checks() -> void:
 	check(palm.global_position == player.global_position and front.health.current == 60, "Palm should follow through windup and initially miss out-of-range target")
 	player.position = Vector2(25, 0)
 	palm._physics_process(0.02)
-	check(palm.global_position == player.global_position and front.health.current == 48, "Active palm must follow movement and hit at its new center")
+	check(palm.global_position == player.global_position and front.health.current == 60 - player.palm_damage, "Active palm must follow movement and hit at its new center")
 	player.position = Vector2(50, 0)
 	palm._physics_process(0.02)
-	check(palm.global_position == player.global_position and front.health.current == 48 and rear.health.current == 60, "Used palm lane must remain centered without hitting additional targets")
+	check(palm.global_position == player.global_position and front.health.current == 60 - player.palm_damage and rear.health.current == 60, "Used palm lane must remain centered without hitting additional targets")
 	clear_combat()
 	await process_frame
 	front = enemy_at(Vector2(41, 0))
 	player.try_sweep(Vector2(100, 0))
-	check(front.health.current == 52, "Sweep must reach beyond old hitbox")
+	check(front.health.current == 60 - player.sweep_damage, "Sweep must reach beyond old hitbox")
 	clear_combat()
 	await process_frame
 	front = enemy_at(Vector2(48, 15))
 	palm = player.try_palm(Vector2(100, 0))
 	palm.resolve()
-	check(front.health.current == 48, "Palm must have longer reach and a wider lane")
+	check(front.health.current == 60 - player.palm_damage, "Palm must have longer reach and a wider lane")
 	clear_combat()
 	await process_frame
 	# Solid geometry blocks melee, just as it blocks movement.
@@ -157,5 +157,7 @@ func run_checks() -> void:
 		await process_frame
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("res://../.codex/melee-preview.png")
+	# Let asynchronous one-shot playback finish before headless engine shutdown.
+	await create_timer(0.35).timeout
 	print("PASS: melee arc/range, nearest palm target, windup, once-per-attack hits, cooldowns, chain damage, walls, input guards, enlarged hitboxes, moving active attacks")
 	quit()

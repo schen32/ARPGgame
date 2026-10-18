@@ -5,6 +5,7 @@ const SKILL_SLOT = preload("res://scripts/skill_slot.gd")
 
 var slots: Array[Panel] = []
 var equipped_slots: Array[Panel] = []
+var passive_slots: Array[Panel] = []
 var player
 
 func _ready() -> void:
@@ -12,8 +13,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_CENTER_RIGHT)
 	offset_left = -262
 	offset_right = -12
-	offset_top = -108
-	offset_bottom = 108
+	offset_top = -172
+	offset_bottom = 104
 	var background := StyleBoxFlat.new()
 	background.bg_color = Color("0e1d27")
 	background.border_color = Color("7295ac")
@@ -36,12 +37,20 @@ func _ready() -> void:
 	close.position = Vector2(218, 7)
 	close.set_deferred("size", Vector2(20, 20))
 	close.pressed.connect(hide)
+	for row in [{"text": "ACTIVE", "y": 29.0}, {"text": "PASSIVE", "y": 94.0}]:
+		var label := Label.new()
+		label.text = row.text
+		label.position = Vector2(14, row.y)
+		label.add_theme_font_size_override("font_size", 7)
+		label.add_theme_color_override("font_color", Color("b0c4d0"))
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(label)
 	for i in range(3):
 		var equipped = SKILL_SLOT.new()
 		equipped.player = player
 		equipped.zone = "equipped"
 		equipped.slot_index = i
-		equipped.position = Vector2(71 + i * 38, 38)
+		equipped.position = Vector2(71 + i * 38, 43)
 		equipped.size = Vector2(32, 32)
 		equipped.add_theme_stylebox_override("panel", slot_style())
 		add_child(equipped)
@@ -54,9 +63,21 @@ func _ready() -> void:
 		binding.position = Vector2(0, 34)
 		equipped.add_child(binding)
 		binding.set_deferred("size", Vector2(32, 10))
+	for i in range(3):
+		var passive = SKILL_SLOT.new()
+		passive.player = player
+		passive.zone = "passive"
+		passive.slot_index = i
+		passive.position = Vector2(71 + i * 38, 108)
+		passive.size = Vector2(32, 32)
+		var style := slot_style()
+		style.border_color = Color("719c80")
+		passive.add_theme_stylebox_override("panel", style)
+		add_child(passive)
+		passive_slots.append(passive)
 	var grid := GridContainer.new()
 	grid.columns = 6
-	grid.position = Vector2(14, 94)
+	grid.position = Vector2(14, 156)
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
 	add_child(grid)

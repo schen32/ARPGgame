@@ -63,5 +63,6 @@ func run_checks() -> void:
 	await process_frame
 	check(player.inventory_skills.all(func(item): return item == &""), "Inventory should begin with empty storage")
 	check(scene.get_node("HUD/Interface").slots.size() == 3, "HUD should expose only the three base skill slots")
+	await create_timer(0.35).timeout
 	print("PASS: health weight, real impact chains, energy loss, loop guards, empty starter inventory")
 	quit()

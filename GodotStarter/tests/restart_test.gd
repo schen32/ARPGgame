@@ -30,11 +30,13 @@ func run_checks() -> void:
 		player.dash_active_this_frame = false
 		old_scene.get_node("HUD/Interface").inventory.show()
 		player.move_skill("equipped", 0, "inventory", 0)
+		player.move_skill("passive", 0, "inventory", 1)
 		player.take_damage(1000.0)
 		await process_frame
 		await process_frame
 		check(not is_instance_valid(old_scene), "Death should replace the old game scene automatically")
 		var fresh_player = current_scene.get_node("Player")
+		check(fresh_player.damage_flash_timer == 0.0 and not current_scene.get_node("HUD/Interface").damage_overlay.visible, "Restart should clear damage flashes and screen notices")
 		check(fresh_player.health.current == 100.0, "Restart should restore full player HP")
 		check(fresh_player.level == 1 and fresh_player.experience == 0, "Restart should reset EXP and level")
 		check(current_scene.get_node("HUD/Interface").exp_bar.value == 0, "Restart should reset the EXP display")
@@ -43,10 +45,14 @@ func run_checks() -> void:
 		check(fresh_player.equipped_skills == [&"sweep", &"palm", &"dash"] and fresh_player.inventory_skills[0] == &"", "Restart should restore default equipped skills and empty storage")
 		check(fresh_player.sweep_timer == 0.0 and fresh_player.knockback_timer == 0.0, "Restart should clear cooldowns and knockback")
 		check(fresh_player.palm_timer == 0.0 and fresh_player.dash_cooldown_timer == 0.0 and fresh_player.dash_timer == 0.0, "Restart should clear spread and dash state")
+		check(get_nodes_in_group("impact_audio").size() == 1, "Restart should replace the audio pool without duplicate managers")
+		check(current_scene.spawn_count == 0, "Restart should reset the big-enemy spawn cadence")
 		check(get_nodes_in_group("enemies").size() == 1, "Restart should restore only the initial enemy")
+		check(fresh_player.equipped_passives == [&"attract_exp", &"", &""] and fresh_player.get_exp_attract_radius() == 32, "Restart should restore the default attract passive")
 		check(fresh_player.inventory_skills.all(func(item): return item == &""), "Restart should restore empty inventory storage")
 		check(get_nodes_in_group("melee_attacks").is_empty(), "Restart should clear active melee attacks")
-		check(get_nodes_in_group("skill_bursts").is_empty(), "Restart should clear active skill particles")
+		check(get_nodes_in_group("hit_bursts").is_empty(), "Restart should clear attack hit particles")
+		check(get_nodes_in_group("dash_trails").is_empty(), "Restart should clear active dash trails")
 		check(get_nodes_in_group("experience_orbs").is_empty(), "Restart should clear dropped EXP orbs")
 		var spawn_timer = current_scene.get_node("EnemySpawnTimer")
 		check(not spawn_timer.is_stopped() and spawn_timer.time_left > 1.8, "Restart should reset the spawn timer")
@@ -60,5 +66,20 @@ func run_checks() -> void:
 	check(enemy.health.current == 0.0 and enemy.is_queued_for_deletion(), "Contact should kill an enemy at 1 HP")
 	check(get_nodes_in_group("death_bursts").size() == 1, "Contact death should emit particles")
 	check(is_equal_approx(current_scene.get_node("Player").health.current, 100.0 - contact_damage), "Lethal enemy contact should still damage player")
+	# If player death queues a reload before a splitter dies in the same contact,
+	# its deferred offspring request must safely disappear with the old scene.
+	var old_scene = current_scene
+	var doomed_player = old_scene.get_node("Player")
+	doomed_player.set_physics_process(false)
+	doomed_player.take_damage(99)
+	var splitter = load("res://scenes/big_enemy.tscn").instantiate()
+	splitter.position = Vector2(20, 0)
+	old_scene.add_child(splitter)
+	splitter.set_physics_process(false)
+	splitter.take_damage(119)
+	splitter._physics_process(1.0 / 60.0)
+	await process_frame
+	await process_frame
+	check(not is_instance_valid(old_scene) and get_nodes_in_group("enemies").size() == 1, "Simultaneous player/splitter death must not leave offspring in a restarted run")
 	print("PASS: automatic repeated restarts, full game reset, 1-HP enemy contact death and particles")
 	quit()

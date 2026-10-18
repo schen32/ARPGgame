@@ -5,6 +5,8 @@ const SHAPE = preload("res://scripts/prototype_shape.gd")
 const EXPERIENCE_BAR = preload("res://scripts/experience_bar.gd")
 const INVENTORY = preload("res://scripts/inventory.gd")
 const SKILL_SLOT = preload("res://scripts/skill_slot.gd")
+const DAMAGE_NOTICE = preload("res://shaders/damage_notice.gdshader")
+const DAMAGE_NOTICE_DURATION: float = 0.32
 const BLUE = Color("80c8ef")
 
 @onready var player = get_node("../../Player")
@@ -12,12 +14,15 @@ const BLUE = Color("80c8ef")
 var hp_gauge
 var exp_bar
 var slots: Array[Panel] = []
+var passive_slots: Array[Panel] = []
 var input_indicators: Array[Label] = []
 var dock: Control
 var sweep_icon
 var cooldown_overlay: Panel
 var cooldown_overlays: Array[Panel] = []
 var inventory
+var damage_overlay: ColorRect
+var damage_timer: float = 0.0
 
 func panel_style(background: Color, border: Color, radius: int = 5) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -29,16 +34,25 @@ func panel_style(background: Color, border: Color, radius: int = 5) -> StyleBoxF
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	damage_overlay = ColorRect.new()
+	damage_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var notice := ShaderMaterial.new()
+	notice.shader = DAMAGE_NOTICE
+	damage_overlay.material = notice
+	add_child(damage_overlay)
+	damage_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	damage_overlay.hide()
+	player.damaged.connect(_on_player_damaged)
 	dock = Control.new()
 	dock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dock)
 	dock.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	dock.offset_left = -76
 	dock.offset_right = 76
-	dock.offset_top = -66
+	dock.offset_top = -90
 	dock.offset_bottom = -14
 	hp_gauge = SHAPE.new()
-	hp_gauge.position = Vector2(26, 26)
+	hp_gauge.position = Vector2(26, 50)
 	hp_gauge.shape_size = Vector2(44, 44)
 	hp_gauge.fill_color = BLUE
 	hp_gauge.border_color = Color("d3ecff")
@@ -48,7 +62,7 @@ func _ready() -> void:
 		slot.player = player
 		slot.zone = "equipped"
 		slot.slot_index = i
-		slot.position = Vector2(64 + i * 28, 18)
+		slot.position = Vector2(64 + i * 28, 42)
 		slot.size = Vector2(22, 22)
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_theme_stylebox_override("panel", panel_style(Color.TRANSPARENT, Color("d3ecff"), 3))
@@ -67,12 +81,22 @@ func _ready() -> void:
 		# Apply final bounds after the theme's minimum-size update.
 		indicator.set_deferred("size", Vector2(22, 10))
 		input_indicators.append(indicator)
+	for i in range(3):
+		var passive = SKILL_SLOT.new()
+		passive.player = player
+		passive.zone = "passive"
+		passive.slot_index = i
+		passive.position = Vector2(66 + i * 28, 16)
+		passive.size = Vector2(18, 18)
+		passive.add_theme_stylebox_override("panel", panel_style(Color.TRANSPARENT, Color("719c80"), 2))
+		dock.add_child(passive)
+		passive_slots.append(passive)
 	sweep_icon = slots[0].icon_root
 	for slot in slots:
 		cooldown_overlays.append(slot.overlay)
 	cooldown_overlay = cooldown_overlays[0]
 	exp_bar = EXPERIENCE_BAR.new()
-	exp_bar.position = Vector2(-2, -2)
+	exp_bar.position = Vector2(-2, 22)
 	exp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	exp_bar.size = Vector2(56, 56)
 	dock.add_child(exp_bar)
@@ -90,11 +114,25 @@ func _on_inventory_visibility_changed() -> void:
 	if is_instance_valid(player):
 		player.inventory_open = inventory.visible
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if damage_timer > 0.0:
+		damage_timer = maxf(0.0, damage_timer - delta)
+		update_damage_notice()
 	if not is_instance_valid(player) or not is_instance_valid(cooldown_overlay):
 		return
 	for slot in slots:
 		slot.update_display()
+
+func _on_player_damaged(_amount: float) -> void:
+	damage_timer = DAMAGE_NOTICE_DURATION
+	update_damage_notice()
+
+func update_damage_notice() -> void:
+	var intensity := damage_timer / DAMAGE_NOTICE_DURATION
+	damage_overlay.visible = damage_timer > 0.0
+	(damage_overlay.material as ShaderMaterial).set_shader_parameter("strength", intensity)
+	hp_gauge.fill_color = BLUE.lerp(Color("ffd0bd"), intensity * 0.65)
+	hp_gauge.border_color = Color("d3ecff").lerp(Color("ff645e"), intensity)
 
 func _on_health_changed(current: float, maximum: float) -> void:
 	hp_gauge.fill_ratio = current / maximum
