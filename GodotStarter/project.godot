@@ -10,9 +10,13 @@ config_version=5
 
 [application]
 
-config/name="ARPG Godot Starter"
-run/main_scene="res://scenes/main.tscn"
+config/name="Game Prototype Lab"
+run/main_scene="res://prototypes/tower_defense/scenes/main.tscn"
 config/features=PackedStringArray("4.6")
+
+[autoload]
+
+PrototypeSwitcher="*res://scripts/prototype_switcher.gd"
 
 [display]
 

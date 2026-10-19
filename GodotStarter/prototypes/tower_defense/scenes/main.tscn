@@ -1,0 +1,42 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://prototypes/tower_defense/scripts/floor.gd" id="floor"]
+[ext_resource type="PackedScene" path="res://prototypes/tower_defense/scenes/enemy.tscn" id="enemy"]
+[ext_resource type="Script" path="res://prototypes/tower_defense/scripts/main.gd" id="main"]
+[ext_resource type="Script" path="res://prototypes/tower_defense/scripts/build_panel.gd" id="panel"]
+[ext_resource type="Script" path="res://prototypes/tower_defense/scripts/impact_audio.gd" id="audio"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("main")
+
+[node name="ImpactAudio" type="Node2D" parent="."]
+script = ExtResource("audio")
+
+[node name="Floor" type="Node2D" parent="."]
+z_index = -1
+script = ExtResource("floor")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(64, 0)
+process_callback = 0
+position_smoothing_enabled = false
+
+[node name="Enemy" parent="." instance=ExtResource("enemy")]
+position = Vector2(-210, -116)
+
+[node name="EnemySpawnTimer" type="Timer" parent="."]
+wait_time = 2.0
+autostart = true
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="Interface" type="Control" parent="HUD"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("panel")
+
+[connection signal="timeout" from="EnemySpawnTimer" to="." method="_on_enemy_spawn_timer_timeout"]

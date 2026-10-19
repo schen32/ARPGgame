@@ -1,4 +1,18 @@
-# Godot Movement Starter
+# Godot Prototype Lab
+
+F5 starts Tower Defense. Press **backtick (`)** to cycle between Tower Defense and ARPG, including while menus pause gameplay. Switching starts a fresh run. Add future scenes to `scripts/prototype_switcher.gd`.
+
+Tower Defense uses a separate copy of the ARPG's geometric combat. There is no player-controlled character, inventory, or passive menu. Red enemies follow the winding green corridor from the top entrance to the bottom exit. Solid walls and 38-pixel gaps leave room for towers between path sections.
+
+Select **Strike** in the right-side tower palette (or press **1**), then **left-click** clear ground to place a square tower for **40 gold**. Start with **120 gold**. The preview is blue for valid placement and red for blocked placement. Placement cannot overlap paths or existing towers, and invalid placement never spends gold. **Right-click** or **Escape** cancels selection; **R** restarts the run. The palette shows the current balance and disables unaffordable towers.
+
+Towers automatically use a 100-degree Strike every 0.4 seconds at nearby enemies (48-pixel reach, 4 direct damage, 330 knockback impulse). Knockback wall slams deal heavy momentum-based damage once per launch; ordinary and glancing contacts cause no damage. Kills award **10 gold** for regular enemies, **20 gold** for large splitters, and **5 gold** for each small split enemy, including wall and collision kills. Escaped enemies award nothing. Currency is awarded immediately; there are no player EXP pickups or HP/skill HUD.
+
+Its scenes, scripts, and shaders are isolated in `prototypes/tower_defense/`; audio assets are shared. Run `godot --headless --fixed-fps 60 --path GodotStarter --script res://tests/tower_defense_test.gd` to check placement, economy, combat, path traversal, restart, and switching.
+
+## ARPG
+
+The ARPG scene remains `scenes/main.tscn` for direct scene runs and existing tests.
 
 An art-free Godot 4.6 top-down movement sandbox.
 

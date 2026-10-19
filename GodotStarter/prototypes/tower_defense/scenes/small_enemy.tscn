@@ -1,0 +1,16 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://prototypes/tower_defense/scenes/enemy.tscn" id="1_enemy"]
+
+[node name="SmallEnemy" instance=ExtResource("1_enemy")]
+body_radius = 6.0
+mass_multiplier = 0.6
+move_speed = 48.0
+stop_distance = 17.0
+contact_damage = 5.0
+splits_on_death = false
+experience_reward = 10
+currency_reward = 5
+
+[node name="Health" parent="." index="0"]
+max_health = 20.0

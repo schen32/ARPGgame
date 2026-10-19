@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://prototypes/tower_defense/scripts/enemy.gd" id="1_enemy"]
+[ext_resource type="Script" path="res://prototypes/tower_defense/scripts/prototype_shape.gd" id="2_shape"]
+[ext_resource type="Script" path="res://prototypes/tower_defense/scripts/health.gd" id="3_health"]
+
+[sub_resource type="CircleShape2D" id="Shape_enemy"]
+radius = 9.0
+
+[node name="Enemy" type="CharacterBody2D" groups=["enemies"]]
+motion_mode = 1
+platform_floor_layers = 0
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1_enemy")
+target_path = NodePath("../Player")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_health")
+max_health = 60.0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape_enemy")
+
+[node name="Geometry" type="Node2D" parent="."]
+script = ExtResource("2_shape")
